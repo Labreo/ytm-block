@@ -8,7 +8,11 @@ Built strictly using vanilla JS, HSL gradients, and CSS glassmorphism, YTM Block
 
 ## 🚀 Key Features
 
-*   **🖱️ Right-Click Context Blocking:** Block any artist by right-clicking a track, artist link, album cover, playlist row, or queue item and choosing **"Block Artist with YTM Block"**.
+*   **🖱️ Right-Click Context Blocking:** Block any artist by right-clicking a track, artist link, album cover, playlist row, or queue item and choosing **"Block Artist with YTM Block"**. 
+    *   *Shadow DOM Workaround:* Built using custom HTML containers to bypass Web Component cloning limits, rendering perfectly every time.
+    *   *Sleek Proportions:* Custom-styled to native specifications (`24x24px`, elegant `2px` stroke outline, and `24px` list margins).
+    *   *Dual-Event Interception:* Listens to both `mousedown` and `click` in the **capture phase** to beat YouTube Music's quick-closing event loop.
+    *   *Non-Destructive Dismissal:* Gracefully closes the menu by triggering a native backdrop or body click, avoiding page lockups or dropdown system crashes.
 *   **✨ Dynamic Glass Toast Notifications:** Displays slick, animated floating capsule toast notifications inside the page viewport. Handles three distinct states:
     *   *Success:* Glowing crimson block indicator on successful block events.
     *   *Duplicate:* Yellow warning alerting you if the artist is already blocked, featuring a **clickable "Unblock" action shortcut** inside the toast.

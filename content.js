@@ -175,7 +175,7 @@ class YTMBlockController {
       .ytm-custom-menu-item {
         display: flex !important;
         align-items: center !important;
-        padding: 0 24px !important;
+        padding: 0 24px 0 16px !important;
         cursor: pointer !important;
         background: transparent !important;
         transition: background-color 0.15s ease !important;
@@ -190,7 +190,7 @@ class YTMBlockController {
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
-        margin-right: 16px !important;
+        margin-right: 12px !important;
         width: 24px !important;
         height: 24px !important;
         color: #FF1E46 !important;
@@ -686,9 +686,9 @@ class YTMBlockController {
 
     newItem.innerHTML = `
       <span class="ytm-custom-menu-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF1E46" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FF1E46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"></circle>
+          <line x1="5.64" y1="5.64" x2="18.36" y2="18.36"></line>
         </svg>
       </span>
       <span class="ytm-custom-menu-text">Block Artist with YTM Block</span>

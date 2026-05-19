@@ -115,5 +115,7 @@ Before submitting YTM Block to the Chrome Web Store Developer Console or Firefox
 4.  [ ] **Background Registration:** Test loading the extension unpack and verify that `background.js` registers `"Block Artist with YTM Block"` context menu successfully on install.
 5.  [ ] **Right-Click Detection Scraper:** Open search cards, playlist lists, artist links, and queue items, right-click, and verify the console outputs showing clean extracted artist names.
 6.  [ ] **Dynamic Toast Transitions:** Confirm the glass capsule toast slides down from top-center on blocking events, and that the unblock button triggers successfully inside the "already blocked" toast.
-7.  [ ] **Loop Guard Test:** Trigger a synthetic skipped queue of 5 tracks to confirm the runaway consecutive skip protection locks the engine and resets correctly after 8 seconds.
-8.  [ ] **Zip Validation:** Open the generated `.zip` file to confirm that all files (`manifest.json`, `content.js`, `background.js`, etc.) sit directly at the root level of the folder structure.
+7.  [ ] **Shadow DOM & Alignment Validation:** Confirm that the custom injected block item displays with native margin proportions (`margin-right: 24px`) and a thin circular SVG outline (`24x24px` with a `2px` stroke) to align perfectly with surrounding items.
+8.  [ ] **Capture Interception & Dismissal Verification:** Verify that the item triggers blocking actions on both `mousedown` and `click` events under capture phase triggers, and closes the dropdown safely by clicking `iron-overlay-backdrop` without page lockups.
+9.  [ ] **Loop Guard Test:** Trigger a synthetic skipped queue of 5 tracks to confirm the runaway consecutive skip protection locks the engine and resets correctly after 8 seconds.
+10. [ ] **Zip Validation:** Open the generated `.zip` file to confirm that all files (`manifest.json`, `content.js`, `background.js`, etc.) sit directly at the root level of the folder structure.
