@@ -1,10 +1,10 @@
 /**
- * YTM Block - Content Script (Phase 5: Queue Scrubbing & Auto-Skipping)
+ * YTM Block - Content Script (Phase 7: Context Menus, Dynamic Toasts & Auto-Skipping)
  * 
  * Injected automatically on music.youtube.com at document_idle.
- * Monitors track transitions via a MutationObserver and automatically skips tracks 
- * by blocked artists. Also actively scrubs the "Up Next" queue, visually dimming 
- * and crossing out blocked tracks to prevent accidental clicks and improve queue visibility.
+ * Monitors track transitions, scrubs Up Next queue elements, caches right-click context menu 
+ * selections, and renders premium floating glass capsule notifications with unblock action 
+ * bindings.
  */
 
 class YTMBlockController {
@@ -42,8 +42,11 @@ class YTMBlockController {
     this.queueDebounceTimeout = null;
     this.queueCheckInterval = null;
     this.processedQueueItems = new WeakSet(); // Performance safeguard to prevent redundant DOM operations
+
+    // Context Menu Temporary Storage
+    this.lastRightClickedArtist = null; // Caches the right-clicked artist temporarily
     
-    console.log('%c[YTM Block]%c Extension active. Phase 5 Queue Scrubber is disarmed.', 'color: #FF0033; font-weight: bold;', 'color: default;');
+    console.log('%c[YTM Block]%c Extension active. Phase 7 Resilient Link Parser is loaded.', 'color: #FF0033; font-weight: bold;', 'color: default;');
   }
 
   /**
@@ -57,17 +60,23 @@ class YTMBlockController {
       // 2. Set up real-time listener for storage changes
       this.setupStorageListener();
 
-      // 3. Inject custom CSS styles for the blocked queue elements
+      // 3. Inject custom CSS styles for the blocked queue elements & dynamic toast alerts
       this.injectCustomStyles();
 
       // 4. Setup the DOM MutationObserver to detect track switches
       this.setupObserver();
 
-      // 5. Set up message port listener to communicate with the popup
+      // 5. Set up message port listener to communicate with the popup & service worker
       this.setupMessageListener();
 
       // 6. Setup the secondary MutationObserver dedicated to the Up Next Queue
       this.setupQueueObserver();
+
+      // 7. Bind capture-phase contextmenu listeners for right-click artist extraction
+      this.setupRightClickListener();
+
+      // 8. Bind capture-phase left-click listeners for three-dot menu button caching
+      this.setupLeftClickListener();
 
     } catch (error) {
       console.error('[YTM Block] Initialization failed:', error);
@@ -75,7 +84,7 @@ class YTMBlockController {
   }
 
   /**
-   * Inject visual styling rules to handle blocked queue elements beautifully.
+   * Inject visual styling rules to handle blocked queue elements beautifully and floating toast notifications.
    */
   injectCustomStyles() {
     const styleId = 'ytm-block-custom-styles';
@@ -101,8 +110,148 @@ class YTMBlockController {
         text-decoration: none !important;
         display: inline-block !important;
       }
+      .ytm-toast-notification {
+        position: fixed !important;
+        top: 24px !important;
+        left: 50% !important;
+        transform: translateX(-50%) translateY(-20px) !important;
+        background: rgba(13, 13, 20, 0.88) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(255, 30, 70, 0.25) !important;
+        color: #FFFFFF !important;
+        padding: 10px 18px !important;
+        border-radius: 30px !important;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 10px rgba(255, 30, 70, 0.1) !important;
+        z-index: 9999999 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+        transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+      }
+      .ytm-toast-notification.show {
+        opacity: 1 !important;
+        transform: translateX(-50%) translateY(0) !important;
+      }
+      .ytm-toast-icon {
+        color: #FF1E46 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+      .ytm-toast-artist {
+        color: #FF5A79 !important;
+        text-transform: capitalize !important;
+      }
+      .ytm-toast-action-btn {
+        background: none !important;
+        border: none !important;
+        color: #FF5A79 !important;
+        font-family: inherit !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        cursor: pointer !important;
+        margin-left: 10px !important;
+        padding: 3px 8px !important;
+        border-radius: 10px !important;
+        background: rgba(255, 30, 70, 0.12) !important;
+        transition: all 0.2s ease !important;
+        pointer-events: auto !important; /* Enable click events on button */
+      }
+      .ytm-toast-action-btn:hover {
+        background: rgba(255, 30, 70, 0.22) !important;
+        transform: scale(1.05) !important;
+      }
+      .ytm-toast-action-btn:active {
+        transform: scale(0.95) !important;
+      }
+      .ytm-custom-menu-item {
+        display: flex !important;
+        align-items: center !important;
+        padding: 0 24px !important;
+        cursor: pointer !important;
+        background: transparent !important;
+        transition: background-color 0.15s ease !important;
+        user-select: none !important;
+        height: 48px !important;
+        box-sizing: border-box !important;
+      }
+      .ytm-custom-menu-item:hover {
+        background-color: rgba(255, 255, 255, 0.08) !important;
+      }
+      .ytm-custom-menu-icon {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin-right: 16px !important;
+        width: 24px !important;
+        height: 24px !important;
+        color: #FF1E46 !important;
+      }
+      .ytm-custom-menu-text {
+        font-family: Roboto, 'Noto Sans', sans-serif !important;
+        font-size: 14px !important;
+        font-weight: 400 !important;
+        color: #E5E7EB !important;
+        transition: color 0.15s ease !important;
+      }
+      .ytm-custom-menu-item:hover .ytm-custom-menu-text {
+        color: #FF1E46 !important;
+      }
     `;
     document.head.appendChild(style);
+  }
+
+  /**
+   * Safely checks if the extension context is still valid.
+   * If the context is invalidated (extension updated/reloaded), cleanly tears down observers.
+   * @returns {boolean} True if context is active and valid.
+   */
+  isContextValid() {
+    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+      this.disconnectAllObservers();
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Cleanly disconnects all active DOM MutationObservers and clears timers
+   * to protect browser memory and prevent console error spam if reloaded.
+   */
+  disconnectAllObservers() {
+    console.warn('[YTM Block] Extension context invalidated (extension reloaded/updated). Disconnecting observers. Please refresh the page to reactivate.');
+    try {
+      if (this.observer) {
+        this.observer.disconnect();
+        this.observer = null;
+      }
+      if (this.queueObserver) {
+        this.queueObserver.disconnect();
+        this.queueObserver = null;
+      }
+      if (this.debounceTimeout) {
+        clearTimeout(this.debounceTimeout);
+        this.debounceTimeout = null;
+      }
+      if (this.queueDebounceTimeout) {
+        clearTimeout(this.queueDebounceTimeout);
+        this.queueDebounceTimeout = null;
+      }
+      if (this.queueCheckInterval) {
+        clearInterval(this.queueCheckInterval);
+        this.queueCheckInterval = null;
+      }
+    } catch (e) {
+      // Catch silently during invalidation tear-down
+    }
   }
 
   /**
@@ -111,10 +260,24 @@ class YTMBlockController {
    */
   async getBlocklist() {
     return new Promise((resolve) => {
-      chrome.storage.sync.get({ blockedArtists: [] }, (result) => {
-        this.blockedArtists = result.blockedArtists || [];
-        resolve(this.blockedArtists);
-      });
+      if (!this.isContextValid()) {
+        resolve([]);
+        return;
+      }
+
+      try {
+        chrome.storage.sync.get({ blockedArtists: [] }, (result) => {
+          if (!this.isContextValid()) {
+            resolve([]);
+            return;
+          }
+          this.blockedArtists = result.blockedArtists || [];
+          resolve(this.blockedArtists);
+        });
+      } catch (error) {
+        this.disconnectAllObservers();
+        resolve([]);
+      }
     });
   }
 
@@ -122,41 +285,172 @@ class YTMBlockController {
    * Synchronizes storage changes instantly when the blocklist is altered.
    */
   setupStorageListener() {
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName === 'sync' && changes.blockedArtists) {
-        this.blockedArtists = changes.blockedArtists.newValue || [];
-        console.log(
-          `%c[YTM Block]%c Blocklist updated. Re-scrubbing queue...`,
-          'color: #FF0033; font-weight: bold;', 'color: default;'
-        );
-        
-        // Force the queue scrubber to re-evaluate the entire list under the new blocklist parameters
-        this.resetQueueScrubbingMarkers();
+    if (!this.isContextValid()) return;
 
-        // Re-evaluate the current track immediately
-        this.handleTrackChange();
-      }
-    });
+    try {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (!this.isContextValid()) return;
+
+        if (areaName === 'sync' && changes.blockedArtists) {
+          this.blockedArtists = changes.blockedArtists.newValue || [];
+          console.log(
+            `%c[YTM Block]%c Blocklist updated. Re-scrubbing queue...`,
+            'color: #FF0033; font-weight: bold;', 'color: default;'
+          );
+          
+          // Force the queue scrubber to re-evaluate the entire list
+          this.resetQueueScrubbingMarkers();
+
+          // Re-evaluate the current track immediately
+          this.handleTrackChange();
+        }
+      });
+    } catch (error) {
+      this.disconnectAllObservers();
+    }
   }
 
   /**
-   * Sets up a message listener to respond to real-time track metadata inquiries from the popup.
+   * Renders a highly-polished glass capsule floating notification inside the page body.
+   * @param {string} artist - Normalized artist name.
+   * @param {string} status - Dynamic status state ('blocked', 'already_blocked', 'failed').
+   */
+  showToastNotification(artist, status) {
+    // 1. Wipe existing toast elements to prevent multiple stacked overlays
+    const existing = document.getElementById('ytm-toast-alert');
+    if (existing) existing.remove();
+
+    // 2. Create the wrapper element
+    const toast = document.createElement('div');
+    toast.id = 'ytm-toast-alert';
+    toast.className = 'ytm-toast-notification';
+
+    // Capitalize artist word sequences for presentation
+    const displayArtist = artist
+      ? artist.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+      : '';
+
+    // Config custom HTML layout based on status states
+    if (status === 'blocked') {
+      toast.style.borderColor = 'rgba(255, 30, 70, 0.25)';
+      toast.innerHTML = `
+        <span class="ytm-toast-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+          </svg>
+        </span>
+        <span>Blocked artist: <span class="ytm-toast-artist">${displayArtist}</span></span>
+      `;
+    } else if (status === 'already_blocked') {
+      toast.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+      toast.innerHTML = `
+        <span class="ytm-toast-icon" style="color: #EAB308;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </span>
+        <span><span class="ytm-toast-artist">${displayArtist}</span> is already blocked</span>
+      `;
+
+      // Append unblock button
+      const unblockBtn = document.createElement('button');
+      unblockBtn.className = 'ytm-toast-action-btn';
+      unblockBtn.textContent = 'Unblock';
+      unblockBtn.addEventListener('click', () => {
+        this.removeArtistFromBlocklist(artist);
+        toast.remove();
+      });
+      toast.appendChild(unblockBtn);
+    } else {
+      // Failed to detect artist state
+      toast.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+      toast.innerHTML = `
+        <span class="ytm-toast-icon" style="color: #EF4444;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </span>
+        <span style="color: #E5E7EB;">Could not detect artist name</span>
+      `;
+    }
+
+    document.body.appendChild(toast);
+
+    // 3. Trigger transition after micro-insertion timeout
+    setTimeout(() => {
+      toast.classList.add('show');
+    }, 20);
+
+    // 4. Clean up transitions and remove node (longer duration if unblock action is present)
+    const displayDuration = status === 'already_blocked' ? 4000 : 2500;
+    setTimeout(() => {
+      if (document.body.contains(toast)) {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          if (document.body.contains(toast)) toast.remove();
+        }, 350);
+      }
+    }, displayDuration);
+  }
+
+  /**
+   * Dynamically removes an artist from persistent sync storage.
+   * @param {string} artist - Raw artist name string.
+   */
+  removeArtistFromBlocklist(artist) {
+    if (!this.isContextValid()) return;
+
+    const normalized = artist.trim().toLowerCase();
+    try {
+      chrome.storage.sync.get({ blockedArtists: [] }, (result) => {
+        if (!this.isContextValid()) return;
+
+        let list = result.blockedArtists || [];
+        list = list.filter(x => x !== normalized);
+        chrome.storage.sync.set({ blockedArtists: list }, () => {
+          if (!this.isContextValid()) return;
+          console.log(`%c[YTM Block]%c Unblocked: "${artist}" via toast shortcut.`, 'color: #10B981; font-weight: bold;', 'color: default;');
+        });
+      });
+    } catch (error) {
+      this.disconnectAllObservers();
+    }
+  }
+
+  /**
+   * Sets up a message listener to respond to real-time track metadata inquiries from the popup or background.
    */
   setupMessageListener() {
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (request.action === 'getCurrentTrack') {
-        const artistData = this.getCurrentArtist();
-        const title = this.getCurrentSongTitle();
-        const isPlaying = this.isPlaybackActive();
-        
-        sendResponse({
-          artist: artistData.artist,
-          title: title,
-          isPlaying: isPlaying
-        });
-      }
-      return true; // Keep message channel open for asynchronous responses
-    });
+    if (!this.isContextValid()) return;
+
+    try {
+      chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (!this.isContextValid()) return;
+
+        if (request.action === 'getCurrentTrack') {
+          const artistData = this.getCurrentArtist();
+          const title = this.getCurrentSongTitle();
+          const isPlaying = this.isPlaybackActive();
+          
+          sendResponse({
+            artist: artistData.artist,
+            title: title,
+            isPlaying: isPlaying,
+            rightClickedArtist: this.lastRightClickedArtist ? this.lastRightClickedArtist.artist : null
+          });
+        } else if (request.action === 'showToast') {
+          this.showToastNotification(request.artist, request.status);
+        }
+        return true; // Keep message channel open for asynchronous responses
+      });
+    } catch (error) {
+      this.disconnectAllObservers();
+    }
   }
 
   /**
@@ -164,16 +458,21 @@ class YTMBlockController {
    * Uses a robust debounce window to let DOM updates settle before track parsing.
    */
   setupObserver() {
-    console.log('[YTM Block] Initializing DOM MutationObserver on ytmusic-app...');
-
     const target = document.querySelector('ytmusic-app');
     if (!target) {
-      console.warn('[YTM Block] ytmusic-app not found in DOM yet. Retrying in 1 second...');
       setTimeout(() => this.setupObserver(), 1000);
       return;
     }
 
     this.observer = new MutationObserver(() => {
+      // --- ROBUST DYNAMIC POPUP MENU DETECTOR ---
+      if (this.isContextValid()) {
+        const popup = document.querySelector('ytmusic-menu-popup-renderer');
+        if (popup) {
+          this.injectCustomMenuItem();
+        }
+      }
+
       if (this.debounceTimeout) {
         clearTimeout(this.debounceTimeout);
       }
@@ -187,8 +486,6 @@ class YTMBlockController {
       subtree: true,
       characterData: true
     });
-
-    console.log('[YTM Block] MutationObserver is active and listening for track switches.');
   }
 
   /**
@@ -196,12 +493,8 @@ class YTMBlockController {
    * Runs lightweight polling initially to bind once the queue element is attached.
    */
   setupQueueObserver() {
-    console.log('[YTM Block] Initializing Up Next Queue Scrubber observer...');
-
     const queue = document.querySelector('ytmusic-player-queue');
     if (!queue) {
-      // The queue element is usually instantiated dynamically on active playback.
-      // Poll dynamically to capture and bind once present.
       if (this.queueCheckInterval) clearInterval(this.queueCheckInterval);
       this.queueCheckInterval = setInterval(() => {
         const activeQueue = document.querySelector('ytmusic-player-queue');
@@ -221,10 +514,7 @@ class YTMBlockController {
    * @param {HTMLElement} queueElement 
    */
   bindQueueObserver(queueElement) {
-    console.log('[YTM Block] Queue container found. Binding MutationObserver...');
-
     this.queueObserver = new MutationObserver(() => {
-      // Debounce queue modifications (400ms) to ensure scrubbing is exceptionally lightweight
       if (this.queueDebounceTimeout) {
         clearTimeout(this.queueDebounceTimeout);
       }
@@ -238,7 +528,6 @@ class YTMBlockController {
       subtree: true
     });
 
-    // Run an initial scrub to catch items pre-populated inside the DOM
     this.scrubQueue();
   }
 
@@ -255,27 +544,19 @@ class YTMBlockController {
     let blockedCount = 0;
 
     items.forEach((item) => {
-      // --- DUAL LAYER PERFORMANCE GUARD ---
-      // Skip item if it has already been processed to save DOM performance.
-      // Utilizing both WeakSet (memory reference) and HTML dataset markers (DOM attribute)
-      // provides complete protection across dynamic virtual scroll lists.
       if (this.processedQueueItems.has(item) && item.dataset.ytmProcessed === 'true') {
         return;
       }
 
-      // Mark item as processed
       this.processedQueueItems.add(item);
       item.dataset.ytmProcessed = 'true';
       processedCount++;
 
-      // Extract artist from the queue item
       const artist = this.getQueueItemArtist(item);
       if (!artist) return;
 
-      // Evaluate against the blocklist
       const matchResult = this.shouldSkipArtist(artist);
       if (matchResult.shouldSkip) {
-        // Dim the queue item and restrict clicks
         item.classList.add('ytm-blocked-queue-item');
         blockedCount++;
       }
@@ -287,12 +568,27 @@ class YTMBlockController {
   }
 
   /**
-   * Extracts the artist name from a queue item element using multiple stable selectors.
+   * Extracts the artist name from a queue item element using structural links.
    * @param {HTMLElement} item - Single queue list item element.
    * @returns {string} Trimmed artist name.
    */
   getQueueItemArtist(item) {
-    // Selector 1: Stable byline class inside queue element
+    // Upgraded: Scan all links to locate browse links (excluding playlist/album links)
+    const anchors = item.querySelectorAll('a');
+    for (const link of anchors) {
+      const href = link.getAttribute('href') || '';
+      const text = link.textContent.trim();
+      
+      if (href.includes('/browse/') && 
+          !href.includes('/browse/VL') && 
+          !href.includes('/browse/MPRE') && 
+          !href.includes('/watch?v=') && 
+          text) {
+        return text;
+      }
+    }
+
+    // Fallback: Parse secondary split-by-bullet byline classes
     const bylineEl = item.querySelector('.byline') || item.querySelector('[class*="byline"]');
     if (bylineEl && bylineEl.textContent) {
       const text = bylineEl.textContent.trim();
@@ -304,13 +600,6 @@ class YTMBlockController {
       }
     }
 
-    // Selector 2: Anchor links inside byline (usually points to artist profiles)
-    const anchor = item.querySelector('a');
-    if (anchor && anchor.textContent && anchor.textContent.trim()) {
-      return anchor.textContent.trim();
-    }
-
-    // Selector 3: Generic secondary metadata label
     const secondary = item.querySelector('.secondary-title') || item.querySelector('.secondary');
     if (secondary && secondary.textContent && secondary.textContent.trim()) {
       return secondary.textContent.trim();
@@ -331,9 +620,345 @@ class YTMBlockController {
       item.classList.remove('ytm-blocked-queue-item');
     });
 
-    // Run active scrub immediately
     this.scrubQueue();
   }
+
+  // --- RIGHT-CLICK CONTEXT EXTRACTION SYSTEM ---
+
+  /**
+   * Sets up a capture-phase right-click event listener to resolve the targeted artist name.
+   */
+  setupRightClickListener() {
+    document.addEventListener('contextmenu', (event) => {
+      this.handleRightClick(event);
+    }, true); // Binds to capture phase to intercept context menu before propagation halts
+  }
+
+  /**
+   * Sets up a capture-phase left-click event listener to cache targeted artist names 
+   * when the user clicks a three-dot button or a similar custom menu launcher.
+   */
+  setupLeftClickListener() {
+    document.addEventListener('click', (event) => {
+      const clicked = event.target;
+      if (!clicked) return;
+
+      const menuButton = clicked.closest('ytmusic-menu-renderer') || 
+                         clicked.closest('.menu-button') || 
+                         clicked.closest('#button') ||
+                         clicked.closest('.ytmusic-menu-renderer');
+      if (menuButton) {
+        console.log('%c[YTM Block]%c 🖱️ Left-click on menu button resolved! Crawling context...', 'color: #FF0033; font-weight: bold;', 'color: default;');
+        const extracted = this.extractArtistFromContext(menuButton);
+        if (extracted && extracted.artist) {
+          const normalized = this.normalizeArtist(extracted.artist);
+          this.lastRightClickedArtist = {
+            artist: extracted.artist,
+            normalized: normalized,
+            title: extracted.title || '',
+            timestamp: Date.now()
+          };
+          console.log(`%c[YTM Block]%c Cached artist from menu launcher click: %c"${extracted.artist}"`, 'color: #10B981; font-weight: bold;', 'color: default;', 'color: #FF1E46; font-weight: bold;');
+        } else {
+          console.log('%c[YTM Block]%c Could not extract artist context from click.', 'color: #EF4444; font-weight: bold;', 'color: default;');
+        }
+      }
+    }, true);
+  }
+
+  /**
+   * Instantly injects a custom crimson "Block Artist" menu item into 
+   * YouTube Music's custom DOM context menu overlay.
+   */
+  injectCustomMenuItem() {
+    const menuList = document.querySelector('ytmusic-menu-popup-renderer #items') || 
+                     document.querySelector('#items.ytmusic-menu-popup-renderer');
+    if (!menuList) return;
+
+    // Check if already injected to avoid duplicate items
+    if (menuList.querySelector('[data-ytm-block-injected="true"]')) return;
+
+    // Create standard HTML item with custom classes (bypasses shadow DOM and Polymer binding limits)
+    const newItem = document.createElement('div');
+    newItem.className = 'ytm-custom-menu-item';
+    newItem.setAttribute('data-ytm-block-injected', 'true');
+    newItem.setAttribute('role', 'menuitem');
+
+    newItem.innerHTML = `
+      <span class="ytm-custom-menu-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF1E46" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+        </svg>
+      </span>
+      <span class="ytm-custom-menu-text">Block Artist with YTM Block</span>
+    `;
+
+    // Define a unified event handler to intercept before YTM closes on mousedown/click
+    let actionTriggered = false;
+    const handleAction = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Avoid double-execution if both mousedown and click fire in the same user interaction
+      if (actionTriggered) return;
+      actionTriggered = true;
+      setTimeout(() => { actionTriggered = false; }, 500);
+
+      console.log(`%c[YTM Block] Crimson custom menu item event (${e.type}) triggered!`, 'color: #FF1E46; font-weight: bold;');
+
+      const artistToBlock = this.lastRightClickedArtist ? this.lastRightClickedArtist.artist : null;
+      console.log(`%c[YTM Block]%c Block action triggered. Cached artist: %c"${artistToBlock || 'None'}"`, 'color: #FF1E46; font-weight: bold;', 'color: default;', 'color: #FF1E46; font-weight: bold;');
+
+      if (artistToBlock) {
+        this.addArtistToBlocklistFromInline(artistToBlock);
+      } else {
+        // Fallback to currently playing artist
+        const activeArtist = this.getCurrentArtist().artist;
+        console.log(`%c[YTM Block]%c Fallback to active playing artist: %c"${activeArtist || 'None'}"`, 'color: #38BDF8; font-weight: bold;', 'color: default;', 'color: #38BDF8; font-weight: bold;');
+        if (activeArtist) {
+          this.addArtistToBlocklistFromInline(activeArtist);
+        } else {
+          console.warn('[YTM Block] Block failed: No artist could be extracted from either context or active track.');
+          this.showToastNotification('', 'failed');
+        }
+      }
+
+      // Close YouTube Music's overlay menu naturally (non-destructively)
+      const dismisser = document.querySelector('iron-overlay-backdrop');
+      if (dismisser) {
+        dismisser.click();
+      } else {
+        document.body.click();
+      }
+    };
+
+    // Bind to both mousedown and click in the capture phase to guarantee interception before YTM closes the menu
+    newItem.addEventListener('mousedown', handleAction, true);
+    newItem.addEventListener('click', handleAction, true);
+
+    // Append to the end of the menu list
+    menuList.appendChild(newItem);
+    console.log('[YTM Block] Successfully injected custom HTML "Block Artist" option into YTM dropdown.');
+  }
+
+  /**
+   * Adds an artist to persistent blocklist directly from inline actions.
+   * @param {string} artistName - Raw artist name.
+   */
+  addArtistToBlocklistFromInline(artistName) {
+    console.log(`%c[YTM Block]%c Direct blocking storage query started for: "${artistName}"`, 'color: #10B981; font-weight: bold;', 'color: default;');
+    if (!this.isContextValid()) {
+      console.error('[YTM Block] Storage write halted: Context is invalid (please refresh the page).');
+      return;
+    }
+
+    const normalizedArtist = artistName.trim().toLowerCase();
+    if (!normalizedArtist) return;
+
+    try {
+      chrome.storage.sync.get({ blockedArtists: [] }, (result) => {
+        if (!this.isContextValid()) return;
+
+        const list = result.blockedArtists || [];
+        if (list.includes(normalizedArtist)) {
+          console.log(`%c[YTM Block]%c Artist "${artistName}" is already blocked. Spawning warning toast.`, 'color: #EAB308; font-weight: bold;', 'color: default;');
+          this.showToastNotification(artistName, 'already_blocked');
+          return;
+        }
+
+        list.push(normalizedArtist);
+        list.sort();
+
+        chrome.storage.sync.set({ blockedArtists: list }, () => {
+          if (!this.isContextValid()) return;
+          console.log(`%c[YTM Block]%c Direct block success! Persistent storage updated for: "${artistName}"`, 'color: #10B981; font-weight: bold;', 'color: default;');
+          this.showToastNotification(artistName, 'blocked');
+        });
+      });
+    } catch (error) {
+      console.error('[YTM Block] Direct blocking failed with exception:', error);
+      this.disconnectAllObservers();
+    }
+  }
+
+  /**
+   * Handles right click event by pulling the click target and routing to the parser.
+   * @param {MouseEvent} event - Native contextmenu event.
+   */
+  handleRightClick(event) {
+    const clickedElement = event.target;
+    if (!clickedElement) return;
+
+    const extracted = this.extractArtistFromContext(clickedElement);
+    
+    if (extracted && extracted.artist) {
+      const normalized = this.normalizeArtist(extracted.artist);
+      this.lastRightClickedArtist = {
+        artist: extracted.artist,
+        normalized: normalized,
+        title: extracted.title || '',
+        timestamp: Date.now()
+      };
+
+      console.log('%c[YTM Block] 🖱️ Right-click detected artist!', 'color: #10B981; font-weight: bold;');
+      console.log(`%cArtist:    %c"${extracted.artist}"`, 'font-weight: bold; color: #FFFFFF;', 'color: #FF1E46;');
+      console.log(`%cSong:      %c"${extracted.title || 'None'}"`, 'font-weight: bold; color: #FFFFFF;', 'color: #38BDF8;');
+      console.log(`%cSelector:  %c"${extracted.selector}"`, 'font-weight: bold; color: #FFFFFF;', 'color: #A1A1AA;');
+    } else {
+      // Clear cache on empty backgrounds to allow standard player bar fallback
+      this.lastRightClickedArtist = null;
+    }
+  }
+
+  /**
+   * Traverses upwards from the clicked element utilizing closest() boundaries
+   * to resolve the targeted artist across search, playlists, tracks, albums, queues, or pages.
+   * @param {HTMLElement} el - Right clicked DOM element.
+   * @returns {Object|null} { artist, title, selector }
+   */
+  extractArtistFromContext(el) {
+    if (!el) return null;
+
+    // --- CASE 1: Direct link hover (direct artist link or text anchor) ---
+    const link = el.closest('a');
+    if (link) {
+      const href = link.getAttribute('href') || '';
+      const text = link.textContent.trim();
+      if (href.includes('/browse/') && !href.includes('/browse/VL') && text) {
+        return {
+          artist: text,
+          title: '',
+          selector: 'Direct Artist Link (closest a)'
+        };
+      }
+    }
+
+    // --- CASE 2: Inside a Playlist or Search Row (Responsive List Item) ---
+    const responsiveItem = el.closest('ytmusic-responsive-list-item-renderer');
+    if (responsiveItem) {
+      const artist = this.getResponsiveItemArtist(responsiveItem);
+      const title = this.getResponsiveItemTitle(responsiveItem);
+      if (artist) {
+        return {
+          artist,
+          title,
+          selector: 'ytmusic-responsive-list-item-renderer (closest)'
+        };
+      }
+    }
+
+    // --- CASE 3: Inside the Player Bar ---
+    const playerBar = el.closest('ytmusic-player-bar');
+    if (playerBar) {
+      const artistData = this.getCurrentArtist();
+      const title = this.getCurrentSongTitle();
+      return {
+        artist: artistData.artist,
+        title: title,
+        selector: `ytmusic-player-bar (getCurrentArtist)`
+      };
+    }
+
+    // --- CASE 4: Inside a Queue Item ---
+    const queueItem = el.closest('ytmusic-player-queue-item');
+    if (queueItem) {
+      const artist = this.getQueueItemArtist(queueItem);
+      const titleEl = queueItem.querySelector('.title') || queueItem.querySelector('.song-title');
+      const title = titleEl ? titleEl.textContent.trim() : '';
+      if (artist) {
+        return {
+          artist,
+          title,
+          selector: 'ytmusic-player-queue-item (closest)'
+        };
+      }
+    }
+
+    // --- CASE 5: Inside an Album page or Shelf card ---
+    const card = el.closest('ytmusic-card-shelf-renderer') || el.closest('ytmusic-grid-single-column-item-renderer');
+    if (card) {
+      const artistLink = card.querySelector('a[href*="/browse/UC"]') || card.querySelector('.subtitle a') || card.querySelector('.secondary a');
+      if (artistLink && artistLink.textContent.trim()) {
+        return {
+          artist: artistLink.textContent.trim(),
+          title: '',
+          selector: 'Card/Shelf Artist link extraction'
+        };
+      }
+    }
+
+    // --- CASE 6: Generic list item or container fallback ---
+    const container = el.closest('.responsive-list-item') || el.closest('.song-table-row') || el.closest('tr');
+    if (container) {
+      const artist = this.getQueueItemArtist(container);
+      if (artist) {
+        return {
+          artist,
+          title: '',
+          selector: 'Generic table-row container'
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Upgraded artist parser: extracts explicit browse channel links inside dynamic list items.
+   */
+  getResponsiveItemArtist(item) {
+    // Target all anchors inside this list row item
+    const anchors = item.querySelectorAll('a');
+    for (const link of anchors) {
+      const href = link.getAttribute('href') || '';
+      const text = link.textContent.trim();
+      
+      // An artist browse link points to /browse/ and is NOT a playlist (VL), release (MPRE), or track watch link
+      if (href.includes('/browse/') && 
+          !href.includes('/browse/VL') && 
+          !href.includes('/browse/MPRE') && 
+          !href.includes('/watch?v=') && 
+          text) {
+        return text;
+      }
+    }
+
+    // Fallback: Parse secondary/subtitle columns split by bullets
+    const subtitleEl = item.querySelector('.subtitle') || item.querySelector('.secondary-flex-columns');
+    if (subtitleEl && subtitleEl.textContent) {
+      const text = subtitleEl.textContent.trim();
+      const parts = text.split(/[•·]/);
+      if (parts[0] && parts[0].trim()) {
+        return parts[0].trim();
+      }
+    }
+
+    return '';
+  }
+
+  /**
+   * Helper to parse song titles inside dynamic responsive list item rows.
+   */
+  getResponsiveItemTitle(item) {
+    const titleEl = item.querySelector('.title') || 
+                    item.querySelector('.title-column') || 
+                    item.querySelector('a[class*="title"]');
+    if (titleEl && titleEl.textContent) {
+      return titleEl.textContent.trim();
+    }
+    return '';
+  }
+
+  /**
+   * Sanitizes and normalizes artist name values.
+   */
+  normalizeArtist(name) {
+    if (!name) return '';
+    return name.trim().toLowerCase();
+  }
+
+  // --- CORE PLAYER EXTRACTION METHODS ---
 
   /**
    * Extracts the current song title from the DOM or browser media metadata.
@@ -439,8 +1064,6 @@ class YTMBlockController {
 
     const currentLower = artist.toLowerCase().trim();
     
-    // Check for a case-insensitive partial match
-    // e.g. blocked "drake" matches current playing "Drake ft. Future"
     const match = this.blockedArtists.find(blocked => currentLower.includes(blocked));
     
     if (match) {
@@ -462,25 +1085,21 @@ class YTMBlockController {
    * @returns {boolean} True if player is active and playing.
    */
   isPlaybackActive() {
-    // 1. Primary Check: browser MediaSession playback status
     if (navigator.mediaSession && navigator.mediaSession.playbackState) {
       if (navigator.mediaSession.playbackState === 'playing') return true;
       if (navigator.mediaSession.playbackState === 'paused') return false;
     }
 
-    // 2. Secondary Check: DOM inspection of the primary play/pause button state
     const playPauseBtn = document.querySelector('ytmusic-player-bar #play-pause-button') || 
                          document.querySelector('#play-pause-button');
     if (playPauseBtn) {
       const title = playPauseBtn.getAttribute('title') || '';
       const ariaLabel = playPauseBtn.getAttribute('aria-label') || '';
-      // If active, the button represents the action "Pause" (clicking it pauses)
       if (title.toLowerCase().includes('pause') || ariaLabel.toLowerCase().includes('pause')) {
         return true;
       }
     }
 
-    // 3. Fallback: inspect raw audio/video elements on the page
     const mediaElements = document.querySelectorAll('audio, video');
     for (const media of mediaElements) {
       if (!media.paused && !media.ended && media.currentTime > 0) {
@@ -496,41 +1115,32 @@ class YTMBlockController {
    * performs strict duplicate prevention, logs debugs, and runs blocklist checks.
    */
   async handleTrackChange() {
-    // 1. Force retrieval of blocklist from async storage before matching
     await this.getBlocklist();
 
-    // 2. Gather current track metadata
     const artistData = this.getCurrentArtist();
     const artist = artistData.artist;
     const selectorUsed = artistData.selector;
 
     const title = this.getCurrentSongTitle();
 
-    // 3. Skip if player is idle/loading (empty metadata)
     if (!title && !artist) {
       return;
     }
 
-    // 4. DUPLICATE PREVENTION:
-    // Check if the captured song is exactly the same as our previous check.
-    // Exit silently to prevent duplicated logs from rapid sub-tree mutations.
     if (title === this.lastTrackInfo.title && artist === this.lastTrackInfo.artist) {
       return;
     }
 
-    // 5. Update active track cache
     this.lastTrackInfo = {
       title,
       artist
     };
 
-    // 6. Print track change details
     console.log('%c[YTM Block] 🎵 Track Changed!', 'color: #38BDF8; font-weight: bold;');
     console.log(`%cSong:   %c"${title}"`, 'font-weight: bold; color: #FFFFFF;', 'color: #38BDF8;');
     console.log(`%cArtist: %c"${artist || 'Unknown'}"`, 'font-weight: bold; color: #FFFFFF;', 'color: #F43F5E;');
     console.log(`%cSource: %c"${selectorUsed}"`, 'font-weight: bold; color: #FFFFFF;', 'color: #A1A1AA;');
 
-    // 7. Check if artist is blocked
     const matchResult = this.shouldSkipArtist(artist);
     console.log(`[YTM Block] Match result: shouldSkip=${matchResult.shouldSkip}, matchedTerm="${matchResult.matchedTerm || 'none'}"`);
 
@@ -540,10 +1150,8 @@ class YTMBlockController {
         'color: #FFFFFF; font-weight: bold; background-color: #EF4444; padding: 4px 8px; border-radius: 4px;'
       );
       
-      // Execute the skip
       this.skipTrack();
     } else {
-      // Safely reset consecutive skips on transitioning to an unblocked song
       this.consecutiveSkips = 0;
     }
   }
@@ -556,17 +1164,12 @@ class YTMBlockController {
     const title = this.lastTrackInfo.title;
     const artist = this.lastTrackInfo.artist;
 
-    // --- GUARD 1: Active Playback Check ---
-    // Do not skip if the music is paused. Doing so ruins the user's focus if they paused
-    // the player themselves, and prevents skips when a queue ends and playback naturally stops.
     const active = this.isPlaybackActive();
     if (!active) {
       console.log('%c[YTM Block] ⏸️ Playback is paused/inactive. Skip suppressed.', 'color: #EAB308;');
       return;
     }
 
-    // --- GUARD 2: Click Cooldown (Rate Limiting) ---
-    // Prevent physical button clicks from firing within 1 second of each other.
     const now = Date.now();
     if (now - this.lastClickTime < this.cooldownDuration) {
       this.isCooldownActive = true;
@@ -575,18 +1178,11 @@ class YTMBlockController {
     }
     this.isCooldownActive = false;
 
-    // --- GUARD 3: Stuck DOM/Already Skipped Check ---
-    // If the active track matches our last skipped track, it means the DOM has not finished
-    // transitioning or loading the next song yet, or the next button click failed to register.
-    // Suppress repeated clicks to prevent browser freezing.
     if (title === this.lastSkippedTrack.title && artist === this.lastSkippedTrack.artist) {
       console.log('%c[YTM Block] ⚠️ Skip already attempted for this track. Suppressing spam click.', 'color: #EF4444;');
       return;
     }
 
-    // --- GUARD 4: Infinite Loop Protection (Max Consecutive Skips) ---
-    // If 5 blocked tracks are hit in a row, we shut down skipping for 8 seconds.
-    // This protects against endless skipped lists, empty playlist ends, or buffering loops.
     if (this.consecutiveSkips >= this.maxConsecutiveSkips) {
       console.log('%c[YTM Block] 🚨 Loop Prevention: Max consecutive skips (5) reached. Skip locked for 8s.', 'color: #EF4444; font-weight: bold;');
       this.isCooldownActive = true;
@@ -600,7 +1196,6 @@ class YTMBlockController {
       return;
     }
 
-    // Locate Next Button
     const nextBtn = document.querySelector('ytmusic-player-bar .next-button') || 
                     document.querySelector('.next-button') || 
                     document.querySelector('#next-button');
@@ -610,15 +1205,12 @@ class YTMBlockController {
       return;
     }
 
-    // Perform Auto-Skip
     console.log(`%c[YTM Block] ⏩ TRIGGERING AUTO-SKIP: Skipping "${title}" by "${artist}"...`, 'color: #10B981; font-weight: bold;');
     
-    // Update attempt states
     this.lastClickTime = now;
     this.lastSkippedTrack = { title, artist };
     this.consecutiveSkips++;
 
-    // Click Next Button programmatically
     nextBtn.click();
     
     console.log('%c[YTM Block] next-button clicked successfully.', 'color: #10B981;');
