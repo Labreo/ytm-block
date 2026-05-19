@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YTM Block</title>
+  <!-- Modern clean typography from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* Reset & Theme Variable Declarations */
+    :root {
+      --bg-gradient-start: #08080C;
+      --bg-gradient-end: #101016;
+      --panel-bg: #14141E;
+      --panel-border: #222232;
+      --text-primary: #FFFFFF;
+      --text-secondary: #9CA3AF;
+      --accent-red-start: #FF1E46;
+      --accent-red-end: #D60026;
+      --accent-red-glow: rgba(255, 30, 70, 0.4);
+      --accent-green: #10B981;
+      --danger-hover: #EF4444;
+      --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-family);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      width: 340px;
+      background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+      color: var(--text-primary);
+      padding: 16px;
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar Customization */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Core Extension Card Layout */
+    .extension-card {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Header Styling */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 10px;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-svg {
+      width: 22px;
+      height: 22px;
+      filter: drop-shadow(0 0 4px var(--accent-red-glow));
+    }
+
+    .logo-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-title span {
+      background: linear-gradient(135deg, var(--accent-red-start) 0%, #FF6B8B 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.03);
+      padding: 3px 8px;
+      border-radius: 12px;
+      border: 1px solid var(--panel-border);
+    }
+
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      background-color: var(--accent-green);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--accent-green);
+      animation: pulse 2s infinite;
+    }
+
+    /* Premium Now Playing Status Panel */
+    .now-playing-panel {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .now-playing-panel.active {
+      background: rgba(255, 30, 70, 0.02);
+      border-color: rgba(255, 30, 70, 0.15);
+      box-shadow: 0 4px 12px rgba(255, 30, 70, 0.05);
+    }
+
+    .now-playing-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .now-playing-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-secondary);
+    }
+
+    .playing-status-text {
+      font-size: 9px;
+      font-weight: 600;
+      color: #6B7280;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 2px 6px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+
+    .playing-status-text.live {
+      color: var(--accent-green);
+      background: rgba(16, 185, 129, 0.08);
+    }
+
+    .now-playing-body {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .track-info-container {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex: 1;
+    }
+
+    .current-artist-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .current-title-text {
+      font-size: 10px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+
+    .block-current-btn {
+      background: linear-gradient(135deg, var(--accent-red-start) 0%, var(--accent-red-end) 100%);
+      border: none;
+      color: var(--text-primary);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(255, 30, 70, 0.25);
+      white-space: nowrap;
+    }
+
+    .block-current-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px var(--accent-red-glow);
+      filter: brightness(1.1);
+    }
+
+    .block-current-btn:active {
+      transform: translateY(1px);
+    }
+
+    .block-current-btn:disabled {
+      background: #27273A;
+      color: #6B7280;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+      box-shadow: none;
+      cursor: not-allowed;
+      transform: none;
+      filter: none;
+    }
+
+    .block-btn-icon {
+      width: 10px;
+      height: 10px;
+    }
+
+    /* Input Section Layout */
+    .input-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .artist-input {
+      flex: 1;
+      background-color: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      color: var(--text-primary);
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      outline: none;
+      transition: all 0.25s ease;
+    }
+
+    .artist-input:focus {
+      border-color: var(--accent-red-start);
+      box-shadow: 0 0 8px var(--accent-red-glow);
+    }
+
+    .artist-input::placeholder {
+      color: #555566;
+    }
+
+    .add-btn {
+      background: linear-gradient(135deg, var(--accent-red-start) 0%, var(--accent-red-end) 100%);
+      border: none;
+      color: var(--text-primary);
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(255, 30, 70, 0.2);
+    }
+
+    .add-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px var(--accent-red-glow);
+      filter: brightness(1.1);
+    }
+
+    .add-btn:active {
+      transform: translateY(1px);
+    }
+
+    .add-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* Toast/Feedback Message */
+    .feedback-message {
+      font-size: 10px;
+      font-weight: 500;
+      color: #FF5A79;
+      min-height: 14px;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: all 0.25s ease;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .feedback-message.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Blocklist Section Styling */
+    .list-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-secondary);
+    }
+
+    .count-badge {
+      background-color: var(--panel-border);
+      color: var(--text-primary);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    /* Artist Pills Grid Wrapper */
+    .artist-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-height: 140px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    /* Modern Pill Tag */
+    .artist-pill {
+      display: inline-flex;
+      align-items: center;
+      background-color: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--panel-border);
+      padding: 5px 8px 5px 10px;
+      border-radius: 16px;
+      gap: 5px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: slideIn 0.25s ease;
+    }
+
+    .artist-pill:hover {
+      background-color: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .pill-name {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
+      text-transform: capitalize;
+    }
+
+    /* Remove X Button */
+    .remove-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px;
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+
+    .remove-btn:hover {
+      color: var(--danger-hover);
+      background-color: rgba(239, 68, 68, 0.15);
+      transform: scale(1.1);
+    }
+
+    /* Empty List State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 12px;
+      text-align: center;
+      background-color: rgba(255, 255, 255, 0.01);
+      border: 1px dashed var(--panel-border);
+      border-radius: 8px;
+      gap: 6px;
+      animation: fadeIn 0.4s ease;
+    }
+
+    .empty-icon-svg {
+      width: 26px;
+      height: 26px;
+      color: var(--text-secondary);
+      opacity: 0.5;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    .empty-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .empty-subtitle {
+      font-size: 10px;
+      color: var(--text-secondary);
+      max-width: 220px;
+      line-height: 1.4;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Keyframe Animations */
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+      70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes float {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-3px); }
+      100% { transform: translateY(0px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="extension-card">
+    <!-- Header with title & active indicator -->
+    <header class="header">
+      <div class="logo-container">
+        <svg class="logo-svg" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="256" cy="256" r="230" fill="#121212" stroke="#FF0033" stroke-width="6"/>
+          <circle cx="256" cy="256" r="140" fill="none" stroke="#FF0033" stroke-width="26"/>
+          <line x1="157" y1="157" x2="355" y2="355" stroke="#FF0033" stroke-width="26" stroke-linecap="round"/>
+          <polygon points="215,185 215,327 315,256" fill="#FFFFFF" opacity="0.9"/>
+        </svg>
+        <h1 class="logo-title">YTM <span>Block</span></h1>
+      </div>
+      <div class="status-badge" title="Actively listening on music.youtube.com">
+        <div class="status-dot"></div>
+        <span>Active</span>
+      </div>
+    </header>
+
+    <!-- Glassmorphic Now Playing Panel -->
+    <section id="nowPlayingPanel" class="now-playing-panel">
+      <div class="now-playing-header">
+        <span class="now-playing-label">Currently Playing</span>
+        <span id="playingStatusText" class="playing-status-text">Disconnected</span>
+      </div>
+      <div class="now-playing-body">
+        <div class="track-info-container">
+          <span id="currentArtistText" class="current-artist-text">No active track</span>
+          <span id="currentTitleText" class="current-title-text">Open YouTube Music tab</span>
+        </div>
+        <button id="blockCurrentBtn" class="block-current-btn" disabled>
+          <svg class="block-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+          </svg>
+          <span>Block</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Manual Add Section -->
+    <section class="input-section">
+      <div class="input-row">
+        <input 
+          type="text" 
+          id="artistInput" 
+          class="artist-input" 
+          placeholder="Enter artist name..." 
+          maxlength="50"
+          autocomplete="off"
+        >
+        <button id="addBtn" class="add-btn" title="Block artist">
+          <svg viewBox="0 0 24 24">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+      <div id="feedbackMsg" class="feedback-message"></div>
+    </section>
+
+    <!-- Blocked List Pills -->
+    <section class="list-section">
+      <div class="list-header">
+        <span>Blocked Artists</span>
+        <span id="countBadge" class="count-badge">0</span>
+      </div>
+
+      <!-- Empty state when no artists are blocked -->
+      <div id="emptyState" class="empty-state">
+        <svg class="empty-icon-svg" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 9l10.5-3m0 0L5.25 8.25m14.25-2.25V18.75m-14.25-10.5V18.75M9 9a2.25 2.25 0 11-4.5 0A2.25 2.25 0 019 9zm10.5-3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-10.5 12H9a2.25 2.25 0 11-4.5 0A2.25 2.25 0 019 18.75zm10.5 0h.008v.008h-.008V18.75zm0 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L15.75 6"></path>
+        </svg>
+        <p class="empty-title">No blocked artists</p>
+        <p class="empty-subtitle">Artists added here will be instantly auto-skipped.</p>
+      </div>
+
+      <!-- Flex-wrap pill tags list -->
+      <div id="artistList" class="artist-list hidden"></div>
+    </section>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
