@@ -1,6 +1,6 @@
 # YTM Block 🚫🎵
 
-An elegant, secure, and lightweight MV3 browser extension for **YouTube Music** (`music.youtube.com`) that automatically skips tracks from blocked artists, scrubs them from your "Up Next" queue, and provides context-aware right-click artist blocking.
+An elegant, secure, and lightweight MV3 browser extension for **YouTube Music** (`music.youtube.com`) that automatically skips tracks from blocked artists, songs, and albums, scrubs them from your "Up Next" queue, filters recommendation cards, and provides context-aware right-click entity blocking.
 
 Built strictly using vanilla JS, HSL gradients, and CSS glassmorphism, YTM Block delivers a premium visual experience with zero tracker scripts, zero bloat, and fully localized storage synchronization.
 
@@ -8,24 +8,33 @@ Built strictly using vanilla JS, HSL gradients, and CSS glassmorphism, YTM Block
 
 ## 🚀 Key Features
 
-*   **🖱️ Right-Click Context Blocking:** Block any artist by right-clicking a track, artist link, album cover, playlist row, or queue item and choosing **"Block Artist with YTM Block"**. 
-    *   *Shadow DOM Workaround:* Built using custom HTML containers to bypass Web Component cloning limits, rendering perfectly every time.
-    *   *Sleek Proportions:* Custom-styled to native specifications (`24x24px`, elegant `2px` stroke outline, and `24px` list margins).
-    *   *Dual-Event Interception:* Listens to both `mousedown` and `click` in the **capture phase** to beat YouTube Music's quick-closing event loop.
-    *   *Non-Destructive Dismissal:* Gracefully closes the menu by triggering a native backdrop or body click, avoiding page lockups or dropdown system crashes.
-*   **✨ Dynamic Glass Toast Notifications:** Displays slick, animated floating capsule toast notifications inside the page viewport. Handles three distinct states:
-    *   *Success:* Glowing crimson block indicator on successful block events.
-    *   *Duplicate:* Yellow warning alerting you if the artist is already blocked, featuring a **clickable "Unblock" action shortcut** inside the toast.
-    *   *Failure:* Red warning if no relevant artist name could be extracted.
-*   **⚡ Real-Time Auto-Skipping:** Programmatically skips tracks from blocked artists with a sub-second response time. Supports **case-insensitive** and **partial-substring** matching (e.g., blocking `drake` matches `Drake`, `Drake ft. Future`, and `Drake, Lil Baby`).
-*   **👁️ "Up Next" Queue Scrubbing:** Scans the queue dynamically to dim blocked songs (set to `0.16` opacity), apply a line-through, and inject an elegant glowing red `[Blocked]` badge.
-*   **🛡️ Click Neutralization:** Employs `pointer-events: none` on blocked queue items, making them unclickable so you never accidentally select them.
-*   **🔒 Cooldown & Loop Prevention:** Incorporates state-of-the-art protections:
-    *   *1.0s Click Cooldown:* Protects against physical double-clicking.
-    *   *Stuck DOM Guard:* Halts click events if the webpage fails to transition.
-    *   *Consecutive Skips Ceiling:* Locks the engine for 8s if 5 tracks are skipped in a row to protect tab performance on empty queues.
-*   **🎨 Premium Glassmorphic Popup UX:** Features a dark obsidian glass card, alphabetic horizontal pills, single-click tag deletion with scale exit transitions, and a **Live Now Playing Card** with one-click blocking.
-*   **🔄 Sync Persistence:** Built on `chrome.storage.sync` to sync your blocklist automatically across all browsers signed into the same account.
+*   **🖱️ Multi-Entity Right-Click Context Blocking:** Block any resolved **Artist, Song, or Album** by right-clicking on elements (tracks, links, covers, playlists, or player bars). 
+    *   *Dynamic Native Menus:* Background service worker updates sub-menu visibility and titles on the fly (e.g., `Block Artist "Drake"`, `Block Album "Views"`, `Block Song "Hotline Bling"`).
+    *   *Custom DOM Menus:* Seamlessly injects crimson block shortcuts into YouTube Music's custom popups.
+    *   *Shadow DOM Escaping:* Crawls parent/host nodes across Shadow DOM boundaries (`current.parentElement || current.parentNode.host`) to query exact link attributes.
+    *   *Non-Destructive Dismissal:* Dismisses menus naturally by triggering a backdrop click, avoiding page layout lockups.
+*   **✨ Dynamic Glass Toast Notifications:** Renders elegant, animated floating capsule overlays with responsive state actions:
+    *   *Success:* Spawns a crimson notification (e.g., `"Blocked song: Hotline Bling"`) with an inline **Unblock** action button.
+    *   *Duplicate:* Yellow capsule informing you the item is already blocked.
+    *   *Failure:* Red capsule warning if context extraction yielded no data.
+*   **⚡ Prioritized Skip Engine:** Skips tracks automatically with a sub-second transition. Follows strict matching priorities:
+    1. **Blocked Songs:** Matches exactly or fuzzily (ignores punctuation and accents, cleans bracketed text like `[Remix]` or `(feat. ...)`).
+    2. **Blocked Albums:** Matches exact or substring album titles.
+    3. **Blocked Artists:** Matches partial substrings to cover collaborative tracks or split credits.
+*   **👁️ Queue Intelligence:** Scans "Up Next" lists dynamically, employing virtualization-safe cache checks.
+    *   *Visual Suppression:* Flags blocked tracks with a red left border, dimmed `0.35` opacity, line-through text, and an absolute-positioned `"BLOCKED"` capsule badge.
+    *   *Queue Stats Counter:* Injects a sleek stats capsule (e.g., `"3 blocked tracks hidden"`) into the queue header.
+    *   *Click Intercept:* Neutralizes user clicks on flagged tracks using capture-phase event blockers, spawning a warning toast notification instead.
+*   **🔍 Layout-Safe Recommendation Filtering:** Suppresses blocked items across home feeds, mixes, shelves, and search results.
+    *   *Grid Safeguard:* Instead of collapsing elements (which breaks column distributions), it blurs card contents (`12px`) and centers a custom translucent overlay reading `"Blocked by YTM Block"`.
+*   **🔒 Cooldown & Loop Protections:** Advanced stability guardrails:
+    *   *1s Skip Cooldown:* Prevents physical and automated skip double-triggering.
+    *   *Stuck DOM Protection:* Inhibits transition attempts if a track switch fails.
+    *   *Consecutive Skips Lock:* Pauses skipping for 8s if 5 tracks are skipped sequentially, protecting browser tabs from infinite autoplay loops.
+*   **📊 Categorized Blocking Dashboard Popup:** Redesigned popup UI displaying Blocked Songs, Albums, and Artists simultaneously.
+    *   *Real-time Filters:* The search box instantly filters all lists as you type.
+    *   *One-Click Blockers:* The Currently Playing panel displays live track data queried from tabs, sorting them dynamically (prioritizing audible/active tabs) with standalone add buttons.
+*   **🔄 Sync Persistence:** Operates on `chrome.storage.sync` to sync your blocklists automatically across all browsers signed into your account.
 
 ---
 
@@ -35,21 +44,21 @@ Built strictly using vanilla JS, HSL gradients, and CSS glassmorphism, YTM Block
 graph TD
     %% Extension Popup Component
     subgraph Popup Context [popup.html / popup.js]
-        A[Popup DomLoaded] -->|Query Storage| B[state.blockedArtists]
-        B -->|Build Grid| C[Horizontal Pills Grid]
+        A[Popup DomLoaded] -->|Query Storage| B[Dashboard Blocklists]
+        B -->|Build Lists| C[Songs, Albums, Artists Lists]
         A -->|1s Poll Timer| D[queryCurrentlyPlaying]
-        D -->|tabs.sendMessage| E{Message Port}
+        D -->|Search Audible Tabs| E{Message Port}
         E -->|getCurrentTrack| F[updateNowPlayingUI]
-        F -->|Render Track Info| G[Now Playing Card]
-        H[Add Artist / Block Current] -->|addArtistToBlocklist| B
+        F -->|Render Info| G[Currently Playing Panel]
+        H[Filter Search / Add Manual] -->|addBlockedItem| B
     end
 
     %% Service Worker Context
     subgraph Background Service Worker [background.js]
-        SW_Init[onInstalled] -->|Register Menu| SW_Menu[chrome.contextMenus]
-        SW_Menu -->|onClicked| SW_Click[handleBlockArtistAction]
+        SW_Init[onInstalled] -->|Register Menus| SW_Menu[chrome.contextMenus]
+        SW_Menu -->|onClicked| SW_Click[handleBlockAction]
         SW_Click -->|tabs.sendMessage| E
-        SW_Click -->|Process Block| SW_Save[addArtistToBlocklist]
+        SW_Click -->|Process Block| SW_Save[addBlockedItem]
         SW_Save -->|Save Storage| SW_Sync[chrome.storage.sync]
         SW_Save -->|tabs.sendMessage| SW_Toast[showToast Message]
     end
@@ -57,27 +66,32 @@ graph TD
     %% Web Content Script Context
     subgraph Content Script Context [content.js]
         I[Injected @ document_idle] -->|init| J[getBlocklist]
-        J -->|chrome.storage.sync| K[blockedArtists Cache]
+        J -->|chrome.storage.sync| K[Sync Cache]
         
         %% Right-Click Context Cache
         I -->|setupRightClickListener| RC_Listen[contextmenu event]
-        RC_Listen -->|Capture Phase| RC_Grab[extractArtistFromContext]
-        RC_Grab -->|Climb closest DOM| RC_Cache[lastRightClickedArtist Cache]
+        RC_Listen -->|Escape Shadow DOM| RC_Grab[extractContextData]
+        RC_Grab -->|Climb closest DOM| RC_Cache[lastRightClickedContext]
         
         %% Player Observer Loop
         I -->|setupObserver| L[Player MutationObserver]
-        L -->|characterData Subtree| M[getCurrentArtist]
-        M -->|Compare Cache| N{shouldSkipArtist?}
+        L -->|characterData Subtree| M[getCurrentPlayingInfo]
+        M -->|Compare Cache| N{shouldSkipTrack?}
         N -->|YES| O[isPlaybackActive?]
         O -->|YES| P[skipTrack]
         P -->|nextBtn.click| Q[Trigger Track Skip]
         
         %% Queue Observer Loop
         I -->|setupQueueObserver| R[Queue MutationObserver]
-        R -->|Debounced 400ms| S[scrubQueue]
-        S -->|WeakSet & dataset Check| T[getQueueItemArtist]
-        T -->|Compare Cache| U{shouldSkipArtist?}
+        R -->|Virtualization Check| S[scrubQueue]
+        S -->|Stats & Click block| T[getQueueItemMetadata]
+        T -->|Compare Cache| U{shouldSkipTrack?}
         U -->|YES| V[Apply .ytm-blocked-queue-item CSS]
+        
+        %% Recommendation Observer Loop
+        I -->|setupRecObserver| RO[Rec MutationObserver]
+        RO -->|Debounced 500ms| RS[scrubRecommendations]
+        RS -->|Blur card & Apply Overlay| RV[Apply .ytm-blocked-rec-card]
         
         %% Toast notification renderer
         SW_Toast -.->|Message Port| W[setupMessageListener]

@@ -1,101 +1,109 @@
 /**
- * YTM Block - Popup Controller
+ * YTM Block - Popup Controller (Dashboard Edition)
  * 
- * Manages the UI lifecycle, persistent storage sync, pill rendering,
- * and dynamic message-passing to query active playing track metadata
- * from the YouTube Music content script.
+ * Manages the multi-category dashboard layout, real-time list filtering,
+ * manual block additions, one-click currently playing blockers, and background polling.
  */
 
 // DOM Elements
-const artistInput = document.getElementById('artistInput');
+const blockInput = document.getElementById('blockInput');
+const blockTypeSelect = document.getElementById('blockTypeSelect');
 const addBtn = document.getElementById('addBtn');
-const artistList = document.getElementById('artistList');
-const emptyState = document.getElementById('emptyState');
-const countBadge = document.getElementById('countBadge');
 const feedbackMsg = document.getElementById('feedbackMsg');
 
-// Now Playing DOM Elements
+// Lists, Badges, and Empty States
+const songList = document.getElementById('songList');
+const albumList = document.getElementById('albumList');
+const artistList = document.getElementById('artistList');
+
+const songCountBadge = document.getElementById('songCountBadge');
+const albumCountBadge = document.getElementById('albumCountBadge');
+const artistCountBadge = document.getElementById('artistCountBadge');
+
+const songEmptyState = document.getElementById('songEmptyState');
+const albumEmptyState = document.getElementById('albumEmptyState');
+const artistEmptyState = document.getElementById('artistEmptyState');
+
+// Now Playing elements
 const nowPlayingPanel = document.getElementById('nowPlayingPanel');
 const playingStatusText = document.getElementById('playingStatusText');
-const currentArtistText = document.getElementById('currentArtistText');
 const currentTitleText = document.getElementById('currentTitleText');
-const blockCurrentBtn = document.getElementById('blockCurrentBtn');
+const currentArtistText = document.getElementById('currentArtistText');
+const currentAlbumText = document.getElementById('currentAlbumText');
 
-// Application State
+const blockCurrentSongBtn = document.getElementById('blockCurrentSongBtn');
+const blockCurrentAlbumBtn = document.getElementById('blockCurrentAlbumBtn');
+const blockCurrentArtistBtn = document.getElementById('blockCurrentArtistBtn');
+
+// State Manager
 let state = {
   blockedArtists: [],
-  currentPlayingArtist: ''
+  blockedSongs: [],
+  blockedAlbums: [],
+  currentPlayingArtist: '',
+  currentPlayingTitle: '',
+  currentPlayingAlbum: '',
+  filterQuery: ''
 };
 
 // --- INITIALIZATION ---
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Initial load of the blocklist from persistent storage
+  // Load blocklists from synced storage
   loadBlocklist();
 
-  // 2. Query currently playing track immediately and poll every 1s
+  // Poll current playing track status
   queryCurrentlyPlaying();
   const pollInterval = setInterval(queryCurrentlyPlaying, 1000);
 
-  // 3. Action Listeners
-  addBtn.addEventListener('click', handleAddArtist);
-  
-  artistInput.addEventListener('keydown', (e) => {
+  // Setup list filter search listener
+  blockInput.addEventListener('input', (e) => {
+    state.filterQuery = e.target.value.toLowerCase().trim();
+    renderListsOnly();
+  });
+
+  // Action listeners
+  addBtn.addEventListener('click', handleAddManualItem);
+  blockInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      handleAddArtist();
+      handleAddManualItem();
     }
   });
 
-  blockCurrentBtn.addEventListener('click', handleBlockCurrentArtist);
+  // One-click actions
+  blockCurrentSongBtn.addEventListener('click', () => handleBlockCurrent('song', state.currentPlayingTitle));
+  blockCurrentAlbumBtn.addEventListener('click', () => handleBlockCurrent('album', state.currentPlayingAlbum));
+  blockCurrentArtistBtn.addEventListener('click', () => handleBlockCurrent('artist', state.currentPlayingArtist));
 
-  // Clean up polling interval on unload
   window.addEventListener('unload', () => {
     clearInterval(pollInterval);
   });
 
-  // Focus input automatically on load
-  artistInput.focus();
+  blockInput.focus();
 });
 
-// --- PERSISTENCE & STORAGE FLOW ---
+// --- PERSISTENCE & STORAGE ---
 
 /**
- * Loads the artist blocklist from chrome.storage.sync.
+ * Reads all block data from storage and triggers a complete UI render cycle.
  */
 function loadBlocklist() {
-  chrome.storage.sync.get({ blockedArtists: [] }, (result) => {
-    if (chrome.runtime.lastError) {
-      showFeedback('Error loading blocklist.');
-      console.error(chrome.runtime.lastError);
-      return;
-    }
-
-    state.blockedArtists = result.blockedArtists || [];
-    renderUI();
+  getBlockData().then((data) => {
+    state.blockedArtists = data.blockedArtists || [];
+    state.blockedSongs = data.blockedSongs || [];
+    state.blockedAlbums = data.blockedAlbums || [];
+    renderAll();
+  }).catch((err) => {
+    showFeedback('Error loading blocklists.');
+    console.error(err);
   });
 }
 
-/**
- * Saves the current local blocklist state to chrome.storage.sync.
- */
-function saveBlocklist() {
-  chrome.storage.sync.set({ blockedArtists: state.blockedArtists }, () => {
-    if (chrome.runtime.lastError) {
-      showFeedback('Failed to save to Chrome Sync.');
-      console.error(chrome.runtime.lastError);
-      return;
-    }
-
-    renderUI();
-    // Refresh Now Playing state in case we just blocked/unblocked the playing artist
-    queryCurrentlyPlaying();
-  });
-}
-
-// --- MESSAGE PASSING & NOW PLAYING QUERY ---
+// --- NOW PLAYING & MESSAGE PASSING ---
 
 /**
- * Queries the active YouTube Music tab for its current playing track.
+ * Sends a message query to content script in the active YTM tab.
+ * Sequentially tests matches, prioritizing active/audible tabs to prevent empty states when multiple tabs exist.
  */
 function queryCurrentlyPlaying() {
   chrome.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
@@ -104,202 +112,282 @@ function queryCurrentlyPlaying() {
       return;
     }
 
-    if (tabs && tabs.length > 0) {
-      // Send message to the active YTM tab content script
-      chrome.tabs.sendMessage(tabs[0].id, { action: 'getCurrentTrack' }, (response) => {
-        if (chrome.runtime.lastError || !response) {
-          updateNowPlayingUI(null);
+    if (!tabs || tabs.length === 0) {
+      updateNowPlayingUI(null);
+      return;
+    }
+
+    // Sort tabs so audible tabs or active tabs are tried first
+    tabs.sort((a, b) => {
+      if (a.audible !== b.audible) return a.audible ? -1 : 1;
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      return 0;
+    });
+
+    let tabIndex = 0;
+    function tryTab() {
+      if (tabIndex >= tabs.length) {
+        updateNowPlayingUI(null);
+        return;
+      }
+
+      const currentTab = tabs[tabIndex];
+      chrome.tabs.sendMessage(currentTab.id, { action: 'getCurrentTrack' }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.title) {
+          tabIndex++;
+          tryTab(); // try next tab
           return;
         }
         updateNowPlayingUI(response);
       });
-    } else {
-      // No tab open on music.youtube.com
-      updateNowPlayingUI(null);
+    }
+
+    tryTab();
+  });
+}
+
+/**
+ * Updates the fields, state, and buttons of the Now Playing card.
+ */
+function updateNowPlayingUI(track) {
+  if (!track || !track.title) {
+    playingStatusText.textContent = 'Disconnected';
+    playingStatusText.classList.remove('live');
+
+    currentTitleText.textContent = 'Open YouTube Music tab';
+    currentArtistText.textContent = 'No active track';
+    currentAlbumText.textContent = 'No active album';
+
+    nowPlayingPanel.classList.remove('active');
+
+    // Disable all actions
+    setBtnBlockedState(blockCurrentSongBtn, false, 'Song');
+    setBtnBlockedState(blockCurrentAlbumBtn, false, 'Album');
+    setBtnBlockedState(blockCurrentArtistBtn, false, 'Artist');
+
+    blockCurrentSongBtn.disabled = true;
+    blockCurrentAlbumBtn.disabled = true;
+    blockCurrentArtistBtn.disabled = true;
+
+    state.currentPlayingArtist = '';
+    state.currentPlayingTitle = '';
+    state.currentPlayingAlbum = '';
+    return;
+  }
+
+  // Populate active track details
+  state.currentPlayingTitle = track.title.trim();
+  state.currentPlayingArtist = track.artist ? track.artist.trim() : '';
+  state.currentPlayingAlbum = track.album ? track.album.trim() : '';
+
+  playingStatusText.textContent = 'Live';
+  playingStatusText.classList.add('live');
+
+  currentTitleText.textContent = state.currentPlayingTitle;
+  currentArtistText.textContent = state.currentPlayingArtist || 'Unknown Artist';
+  currentAlbumText.textContent = state.currentPlayingAlbum || 'Single / No Album';
+
+  nowPlayingPanel.classList.add('active');
+
+  // Evaluate blocking states for each button
+  const isSongBlocked = state.blockedSongs.includes(normalizeEntry(state.currentPlayingTitle));
+  const isAlbumBlocked = state.currentPlayingAlbum ? state.blockedAlbums.includes(normalizeEntry(state.currentPlayingAlbum)) : false;
+  const isArtistBlocked = state.currentPlayingArtist ? state.blockedArtists.includes(normalizeEntry(state.currentPlayingArtist)) : false;
+
+  // Render song action btn state
+  if (isSongBlocked) {
+    setBtnBlockedState(blockCurrentSongBtn, true, 'Blocked');
+  } else {
+    setBtnBlockedState(blockCurrentSongBtn, false, '+ Song');
+    blockCurrentSongBtn.disabled = !state.currentPlayingTitle;
+  }
+
+  // Render album action btn state
+  if (isAlbumBlocked) {
+    setBtnBlockedState(blockCurrentAlbumBtn, true, 'Blocked');
+  } else {
+    setBtnBlockedState(blockCurrentAlbumBtn, false, '+ Album');
+    blockCurrentAlbumBtn.disabled = !state.currentPlayingAlbum;
+  }
+
+  // Render artist action btn state
+  if (isArtistBlocked) {
+    setBtnBlockedState(blockCurrentArtistBtn, true, 'Blocked');
+  } else {
+    setBtnBlockedState(blockCurrentArtistBtn, false, '+ Artist');
+    blockCurrentArtistBtn.disabled = !state.currentPlayingArtist;
+  }
+}
+
+/**
+ * Visual styling toggle helper for action buttons.
+ */
+function setBtnBlockedState(btn, isBlocked, text) {
+  btn.textContent = text;
+  if (isBlocked) {
+    btn.classList.add('blocked');
+    btn.disabled = true;
+  } else {
+    btn.classList.remove('blocked');
+  }
+}
+
+// --- ACTIONS & ADDITIONS ---
+
+/**
+ * Handles manual entries from the input bar matching select type.
+ */
+function handleAddManualItem() {
+  const rawInput = blockInput.value.trim();
+  const type = blockTypeSelect.value; // 'song', 'album', 'artist'
+
+  if (!rawInput) {
+    showFeedback(`Please enter a valid ${type} target.`);
+    return;
+  }
+
+  addBlockedItem(type, rawInput).then((result) => {
+    if (!result.success) {
+      if (result.status === 'already_blocked') {
+        showFeedback(`This ${type} is already blocked.`);
+      } else {
+        showFeedback('Failed to update blocklists.');
+      }
+      return;
+    }
+
+    // Refresh state arrays
+    state.blockedArtists = result.data.blockedArtists || [];
+    state.blockedSongs = result.data.blockedSongs || [];
+    state.blockedAlbums = result.data.blockedAlbums || [];
+
+    blockInput.value = '';
+    state.filterQuery = '';
+    renderAll();
+    queryCurrentlyPlaying();
+    showFeedback(`Blocked ${type}: "${capitalizeWords(normalizeEntry(rawInput))}"`);
+  });
+}
+
+/**
+ * Handles currently playing block buttons.
+ */
+function handleBlockCurrent(type, value) {
+  if (!value) return;
+
+  addBlockedItem(type, value).then((result) => {
+    if (result.success) {
+      state.blockedArtists = result.data.blockedArtists || [];
+      state.blockedSongs = result.data.blockedSongs || [];
+      state.blockedAlbums = result.data.blockedAlbums || [];
+      renderAll();
+      queryCurrentlyPlaying();
+      showFeedback(`Blocked current ${type}: "${capitalizeWords(normalizeEntry(value))}"`);
     }
   });
 }
 
 /**
- * Updates the "Currently Playing" card in the popup using active metadata.
+ * Removes blocked item from sync storage.
  */
-function updateNowPlayingUI(track) {
-  if (!track || !track.artist || !track.title) {
-    // Inactive state (no tab or paused/loading)
-    playingStatusText.textContent = 'Disconnected';
-    playingStatusText.classList.remove('live');
-    
-    currentArtistText.textContent = 'No active track';
-    currentTitleText.textContent = 'Open YouTube Music tab';
-    
-    nowPlayingPanel.classList.remove('active');
-    
-    blockCurrentBtn.setAttribute('disabled', 'true');
-    blockCurrentBtn.dataset.artist = '';
-    
-    const blockBtnText = blockCurrentBtn.querySelector('span');
-    if (blockBtnText) blockBtnText.textContent = 'Block';
-    
-    state.currentPlayingArtist = '';
-    return;
-  }
+function handleRemoveItem(type, itemValue) {
+  removeBlockedItem(type, itemValue).then((result) => {
+    if (result.success) {
+      state.blockedArtists = result.data.blockedArtists || [];
+      state.blockedSongs = result.data.blockedSongs || [];
+      state.blockedAlbums = result.data.blockedAlbums || [];
+      renderAll();
+      queryCurrentlyPlaying();
+      showFeedback(`Unblocked ${type}: "${capitalizeWords(normalizeEntry(itemValue))}"`);
+    }
+  });
+}
 
-  // Active track playing state
-  state.currentPlayingArtist = track.artist.trim();
-  
-  playingStatusText.textContent = 'Live';
-  playingStatusText.classList.add('live');
-  
-  currentArtistText.textContent = capitalizeWords(state.currentPlayingArtist);
-  currentTitleText.textContent = track.title;
-  
-  nowPlayingPanel.classList.add('active');
-  blockCurrentBtn.dataset.artist = state.currentPlayingArtist;
+// --- RENDERERS ---
 
-  // Check if this artist is already blocked
-  const normalizedArtist = state.currentPlayingArtist.toLowerCase().trim();
-  const isAlreadyBlocked = state.blockedArtists.includes(normalizedArtist);
-  
-  const blockBtnText = blockCurrentBtn.querySelector('span');
-  
-  if (isAlreadyBlocked) {
-    blockCurrentBtn.setAttribute('disabled', 'true');
-    if (blockBtnText) blockBtnText.textContent = 'Blocked';
+function renderAll() {
+  renderListsOnly();
+  queryCurrentlyPlaying();
+}
+
+/**
+ * Modular rendering logic for lists that runs separately for quick search updates.
+ */
+function renderListsOnly() {
+  renderCategoryList('song', state.blockedSongs, songList, songCountBadge, songEmptyState);
+  renderCategoryList('album', state.blockedAlbums, albumList, albumCountBadge, albumEmptyState);
+  renderCategoryList('artist', state.blockedArtists, artistList, artistCountBadge, artistEmptyState);
+}
+
+/**
+ * Reusable tag renderer that respects the filter state.
+ */
+function renderCategoryList(type, list, container, badge, emptyStateEl) {
+  // Apply real-time search query filter
+  const filtered = state.filterQuery 
+    ? list.filter(item => item.toLowerCase().includes(state.filterQuery))
+    : list;
+
+  badge.textContent = filtered.length;
+
+  if (filtered.length === 0) {
+    container.innerHTML = '';
+    container.classList.add('hidden');
+    emptyStateEl.classList.remove('hidden');
+    // If filter is active, update empty state label to indicate no matches
+    emptyStateEl.textContent = state.filterQuery ? 'No matching blocks' : `No blocked ${type}s`;
   } else {
-    blockCurrentBtn.removeAttribute('disabled');
-    if (blockBtnText) blockBtnText.textContent = 'Block';
-  }
-}
-
-// --- INTERACTIVE ACTIONS & STATE MUTATIONS ---
-
-/**
- * Shared method to add a sanitized, non-duplicate artist to the blocklist.
- * @param {string} rawName - User entered name.
- * @returns {boolean} True if successfully added.
- */
-function addArtistToBlocklist(rawName) {
-  const normalizedArtist = rawName.trim().toLowerCase();
-
-  // 1. Validate Empty Input
-  if (!normalizedArtist) {
-    showFeedback('Please enter an artist name.');
-    flashInputError();
-    return false;
-  }
-
-  // 2. Prevent Duplicates
-  if (state.blockedArtists.includes(normalizedArtist)) {
-    showFeedback('Artist is already in your blocklist.');
-    flashInputError();
-    return false;
-  }
-
-  // 3. Push and sort state
-  state.blockedArtists.push(normalizedArtist);
-  state.blockedArtists.sort();
-  
-  saveBlocklist();
-  showFeedback(`Blocked "${capitalizeWords(normalizedArtist)}".`);
-  return true;
-}
-
-/**
- * Handles adding an artist from the input box.
- */
-function handleAddArtist() {
-  const rawInput = artistInput.value;
-  const success = addArtistToBlocklist(rawInput);
-  if (success) {
-    artistInput.value = '';
-    artistInput.focus();
-  }
-}
-
-/**
- * One-click handler to block the currently playing artist.
- */
-function handleBlockCurrentArtist() {
-  const artistToBlock = blockCurrentBtn.dataset.artist;
-  if (artistToBlock) {
-    addArtistToBlocklist(artistToBlock);
-  }
-}
-
-/**
- * Removes an artist from the blocklist state.
- */
-function handleRemoveArtist(index) {
-  if (index >= 0 && index < state.blockedArtists.length) {
-    state.blockedArtists.splice(index, 1);
-    saveBlocklist();
-  }
-}
-
-// --- UI RENDERING & COMPONENT GENERATION ---
-
-/**
- * Synchronizes the visual DOM structure with the current blocklist state.
- */
-function renderUI() {
-  const totalCount = state.blockedArtists.length;
-  countBadge.textContent = totalCount;
-
-  if (totalCount === 0) {
-    emptyState.classList.remove('hidden');
-    artistList.classList.add('hidden');
-  } else {
-    emptyState.classList.add('hidden');
-    artistList.classList.remove('hidden');
-
-    // Build modern responsive Flex Pills
-    artistList.innerHTML = '';
+    emptyStateEl.classList.add('hidden');
+    container.classList.remove('hidden');
     
-    state.blockedArtists.forEach((artist, index) => {
-      const pill = document.createElement('div');
-      pill.className = 'artist-pill';
-
-      const displayName = capitalizeWords(artist);
-
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'pill-name';
-      nameSpan.textContent = displayName;
-      nameSpan.title = displayName; // Hover tooltip support
-
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'remove-btn';
-      removeBtn.title = `Unblock ${displayName}`;
-      removeBtn.setAttribute('aria-label', `Remove ${displayName} from blocklist`);
-      
-      // Sleek minimalistic close SVG icon
-      removeBtn.innerHTML = `
-        <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      `;
-
-      // Click deletion handler with exit scale animation
-      removeBtn.addEventListener('click', () => {
-        pill.style.transform = 'scale(0.9)';
-        pill.style.opacity = '0';
-        setTimeout(() => {
-          handleRemoveArtist(index);
-        }, 150);
-      });
-
-      pill.appendChild(nameSpan);
-      pill.appendChild(removeBtn);
-      artistList.appendChild(pill);
+    // Clear list container
+    container.innerHTML = '';
+    
+    filtered.forEach((item) => {
+      container.appendChild(createTagComponent(type, item));
     });
   }
 }
 
-// --- UTILITY & ANIMATION HELPER FUNCTIONS ---
-
 /**
- * Capitalizes the first letter of each word in a string.
+ * Reusable HTML component for blocked pills.
  */
+function createTagComponent(type, value) {
+  const pill = document.createElement('div');
+  pill.className = 'pill-tag';
+
+  const displayName = capitalizeWords(value);
+
+  const textSpan = document.createElement('span');
+  textSpan.className = 'tag-text';
+  textSpan.textContent = displayName;
+  textSpan.title = displayName;
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'tag-remove-btn';
+  removeBtn.title = `Remove "${displayName}"`;
+  removeBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+  `;
+
+  removeBtn.addEventListener('click', () => {
+    pill.style.transform = 'scale(0.9)';
+    pill.style.opacity = '0';
+    setTimeout(() => {
+      handleRemoveItem(type, value);
+    }, 150);
+  });
+
+  pill.appendChild(textSpan);
+  pill.appendChild(removeBtn);
+  return pill;
+}
+
+// --- UTILITIES ---
+
 function capitalizeWords(str) {
   return str
     .split(' ')
@@ -307,12 +395,7 @@ function capitalizeWords(str) {
     .join(' ');
 }
 
-// Timer tracker for toast animations
 let feedbackTimeout = null;
-
-/**
- * Slide-in warning toast message handler.
- */
 function showFeedback(message) {
   if (feedbackTimeout) {
     clearTimeout(feedbackTimeout);
@@ -323,18 +406,5 @@ function showFeedback(message) {
 
   feedbackTimeout = setTimeout(() => {
     feedbackMsg.classList.remove('show');
-  }, 2500);
-}
-
-/**
- * Triggers red glow effect on the manual input field on errors.
- */
-function flashInputError() {
-  artistInput.style.borderColor = '#FF5A79';
-  artistInput.style.boxShadow = '0 0 8px rgba(255, 90, 121, 0.4)';
-  
-  setTimeout(() => {
-    artistInput.style.borderColor = '';
-    artistInput.style.boxShadow = '';
-  }, 400);
+  }, 2200);
 }

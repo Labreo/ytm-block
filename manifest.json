@@ -34,6 +34,7 @@
         "https://music.youtube.com/*"
       ],
       "js": [
+        "storage.js",
         "content.js"
       ],
       "run_at": "document_idle"
