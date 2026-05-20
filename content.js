@@ -513,37 +513,130 @@ class YTMBlockController {
     // Config custom HTML layout based on status states
     if (status === 'blocked') {
       toast.style.borderColor = 'rgba(255, 30, 70, 0.25)';
-      toast.innerHTML = `
-        <span class="ytm-toast-icon">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
-          </svg>
-        </span>
-        <span>Blocked ${type}: <span class="ytm-toast-artist">${displayName}</span></span>
-      `;
+      
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'ytm-toast-icon';
+      
+      const svgNamespace = 'http://www.w3.org/2000/svg';
+      const svgEl = document.createElementNS(svgNamespace, 'svg');
+      svgEl.setAttribute('width', '12');
+      svgEl.setAttribute('height', '12');
+      svgEl.setAttribute('viewBox', '0 0 24 24');
+      svgEl.setAttribute('fill', 'none');
+      svgEl.setAttribute('stroke', 'currentColor');
+      svgEl.setAttribute('stroke-width', '3');
+      svgEl.setAttribute('stroke-linecap', 'round');
+      svgEl.setAttribute('stroke-linejoin', 'round');
+
+      const circle = document.createElementNS(svgNamespace, 'circle');
+      circle.setAttribute('cx', '12');
+      circle.setAttribute('cy', '12');
+      circle.setAttribute('r', '10');
+
+      const line = document.createElementNS(svgNamespace, 'line');
+      line.setAttribute('x1', '4.93');
+      line.setAttribute('y1', '4.93');
+      line.setAttribute('x2', '19.07');
+      line.setAttribute('y2', '19.07');
+
+      svgEl.appendChild(circle);
+      svgEl.appendChild(line);
+      iconSpan.appendChild(svgEl);
+
+      const textSpan = document.createElement('span');
+      textSpan.textContent = `Blocked ${type}: `;
+      
+      const artistSpan = document.createElement('span');
+      artistSpan.className = 'ytm-toast-artist';
+      artistSpan.textContent = displayName;
+      
+      textSpan.appendChild(artistSpan);
+      toast.appendChild(iconSpan);
+      toast.appendChild(textSpan);
     } else if (status === 'unblocked') {
       toast.style.borderColor = 'rgba(16, 185, 129, 0.25)';
-      toast.innerHTML = `
-        <span class="ytm-toast-icon" style="color: #10B981;">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </span>
-        <span>Unblocked ${type}: <span class="ytm-toast-artist">${displayName}</span></span>
-      `;
+      
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'ytm-toast-icon';
+      iconSpan.style.color = '#10B981';
+      
+      const svgNamespace = 'http://www.w3.org/2000/svg';
+      const svgEl = document.createElementNS(svgNamespace, 'svg');
+      svgEl.setAttribute('width', '12');
+      svgEl.setAttribute('height', '12');
+      svgEl.setAttribute('viewBox', '0 0 24 24');
+      svgEl.setAttribute('fill', 'none');
+      svgEl.setAttribute('stroke', 'currentColor');
+      svgEl.setAttribute('stroke-width', '3');
+      svgEl.setAttribute('stroke-linecap', 'round');
+      svgEl.setAttribute('stroke-linejoin', 'round');
+
+      const polyline = document.createElementNS(svgNamespace, 'polyline');
+      polyline.setAttribute('points', '20 6 9 17 4 12');
+
+      svgEl.appendChild(polyline);
+      iconSpan.appendChild(svgEl);
+
+      const textSpan = document.createElement('span');
+      textSpan.textContent = `Unblocked ${type}: `;
+      
+      const artistSpan = document.createElement('span');
+      artistSpan.className = 'ytm-toast-artist';
+      artistSpan.textContent = displayName;
+      
+      textSpan.appendChild(artistSpan);
+      toast.appendChild(iconSpan);
+      toast.appendChild(textSpan);
     } else if (status === 'already_blocked') {
       toast.style.borderColor = 'rgba(239, 68, 68, 0.25)';
-      toast.innerHTML = `
-        <span class="ytm-toast-icon" style="color: #EAB308;">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-            <line x1="12" y1="9" x2="12" y2="13"></line>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-        </span>
-        <span><span class="ytm-toast-artist">${displayName}</span> is already blocked</span>
-      `;
+      
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'ytm-toast-icon';
+      iconSpan.style.color = '#EAB308';
+      
+      const svgNamespace = 'http://www.w3.org/2000/svg';
+      const svgEl = document.createElementNS(svgNamespace, 'svg');
+      svgEl.setAttribute('width', '12');
+      svgEl.setAttribute('height', '12');
+      svgEl.setAttribute('viewBox', '0 0 24 24');
+      svgEl.setAttribute('fill', 'none');
+      svgEl.setAttribute('stroke', 'currentColor');
+      svgEl.setAttribute('stroke-width', '3');
+      svgEl.setAttribute('stroke-linecap', 'round');
+      svgEl.setAttribute('stroke-linejoin', 'round');
+
+      const path = document.createElementNS(svgNamespace, 'path');
+      path.setAttribute('d', 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z');
+
+      const line1 = document.createElementNS(svgNamespace, 'line');
+      line1.setAttribute('x1', '12');
+      line1.setAttribute('y1', '9');
+      line1.setAttribute('x2', '12');
+      line1.setAttribute('y2', '13');
+
+      const line2 = document.createElementNS(svgNamespace, 'line');
+      line2.setAttribute('x1', '12');
+      line2.setAttribute('y1', '17');
+      line2.setAttribute('x2', '12.01');
+      line2.setAttribute('y2', '17');
+
+      svgEl.appendChild(path);
+      svgEl.appendChild(line1);
+      svgEl.appendChild(line2);
+      iconSpan.appendChild(svgEl);
+
+      const textSpan = document.createElement('span');
+      
+      const artistSpan = document.createElement('span');
+      artistSpan.className = 'ytm-toast-artist';
+      artistSpan.textContent = displayName;
+      
+      const suffixSpan = document.createTextNode(' is already blocked');
+      
+      textSpan.appendChild(artistSpan);
+      textSpan.appendChild(suffixSpan);
+      toast.appendChild(iconSpan);
+      toast.appendChild(textSpan);
 
       // Append unblock button
       const unblockBtn = document.createElement('button');
@@ -557,16 +650,50 @@ class YTMBlockController {
     } else {
       // Failed to detect state
       toast.style.borderColor = 'rgba(239, 68, 68, 0.25)';
-      toast.innerHTML = `
-        <span class="ytm-toast-icon" style="color: #EF4444;">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="12"></line>
-            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-          </svg>
-        </span>
-        <span style="color: #E5E7EB;">Could not detect ${type} name</span>
-      `;
+      
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'ytm-toast-icon';
+      iconSpan.style.color = '#EF4444';
+      
+      const svgNamespace = 'http://www.w3.org/2000/svg';
+      const svgEl = document.createElementNS(svgNamespace, 'svg');
+      svgEl.setAttribute('width', '12');
+      svgEl.setAttribute('height', '12');
+      svgEl.setAttribute('viewBox', '0 0 24 24');
+      svgEl.setAttribute('fill', 'none');
+      svgEl.setAttribute('stroke', 'currentColor');
+      svgEl.setAttribute('stroke-width', '3');
+      svgEl.setAttribute('stroke-linecap', 'round');
+      svgEl.setAttribute('stroke-linejoin', 'round');
+
+      const circle = document.createElementNS(svgNamespace, 'circle');
+      circle.setAttribute('cx', '12');
+      circle.setAttribute('cy', '12');
+      circle.setAttribute('r', '10');
+
+      const line1 = document.createElementNS(svgNamespace, 'line');
+      line1.setAttribute('x1', '12');
+      line1.setAttribute('y1', '8');
+      line1.setAttribute('x2', '12');
+      line1.setAttribute('y2', '12');
+
+      const line2 = document.createElementNS(svgNamespace, 'line');
+      line2.setAttribute('x1', '12');
+      line2.setAttribute('y1', '16');
+      line2.setAttribute('x2', '12.01');
+      line2.setAttribute('y2', '16');
+
+      svgEl.appendChild(circle);
+      svgEl.appendChild(line1);
+      svgEl.appendChild(line2);
+      iconSpan.appendChild(svgEl);
+
+      const textSpan = document.createElement('span');
+      textSpan.style.color = '#E5E7EB';
+      textSpan.textContent = `Could not detect ${type} name`;
+      
+      toast.appendChild(iconSpan);
+      toast.appendChild(textSpan);
     }
 
     document.body.appendChild(toast);
@@ -1240,17 +1367,53 @@ class YTMBlockController {
       newItem.style.boxSizing = 'border-box';
 
       // Use a custom icon (crossed out circle for block, checkmark or minus for unblock)
-      newItem.innerHTML = `
-        <span class="ytm-custom-menu-icon" style="display: inline-flex; align-items: center; justify-content: center; margin-right: 16px; width: 24px; height: 24px; color: rgba(255, 255, 255, 0.7); cursor: pointer;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="cursor: pointer;">
-            ${item.action === 'unblock' 
-              ? `<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>`
-              : `<circle cx="12" cy="12" r="9"></circle><line x1="5.64" y1="5.64" x2="18.36" y2="18.36"></line>`
-            }
-          </svg>
-        </span>
-        <span class="ytm-custom-menu-text" style="font-family: Roboto, 'Noto Sans', sans-serif; font-size: 14px; font-weight: 400; color: #FFFFFF; cursor: pointer;">${item.label}</span>
-      `;
+      const svgNS = 'http://www.w3.org/2000/svg';
+
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'ytm-custom-menu-icon';
+      iconSpan.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; margin-right: 16px; width: 24px; height: 24px; color: rgba(255, 255, 255, 0.7); cursor: pointer;';
+
+      const svgIcon = document.createElementNS(svgNS, 'svg');
+      svgIcon.setAttribute('width', '24');
+      svgIcon.setAttribute('height', '24');
+      svgIcon.setAttribute('viewBox', '0 0 24 24');
+      svgIcon.setAttribute('fill', 'none');
+      svgIcon.setAttribute('stroke', 'currentColor');
+      svgIcon.setAttribute('stroke-width', '1.5');
+      svgIcon.setAttribute('stroke-linecap', 'round');
+      svgIcon.setAttribute('stroke-linejoin', 'round');
+      svgIcon.style.cursor = 'pointer';
+
+      if (item.action === 'unblock') {
+        const pathEl = document.createElementNS(svgNS, 'path');
+        pathEl.setAttribute('d', 'M22 11.08V12a10 10 0 1 1-5.93-9.14');
+        const polyEl = document.createElementNS(svgNS, 'polyline');
+        polyEl.setAttribute('points', '22 4 12 14.01 9 11.01');
+        svgIcon.appendChild(pathEl);
+        svgIcon.appendChild(polyEl);
+      } else {
+        const circleEl = document.createElementNS(svgNS, 'circle');
+        circleEl.setAttribute('cx', '12');
+        circleEl.setAttribute('cy', '12');
+        circleEl.setAttribute('r', '9');
+        const lineEl = document.createElementNS(svgNS, 'line');
+        lineEl.setAttribute('x1', '5.64');
+        lineEl.setAttribute('y1', '5.64');
+        lineEl.setAttribute('x2', '18.36');
+        lineEl.setAttribute('y2', '18.36');
+        svgIcon.appendChild(circleEl);
+        svgIcon.appendChild(lineEl);
+      }
+
+      iconSpan.appendChild(svgIcon);
+
+      const textSpan = document.createElement('span');
+      textSpan.className = 'ytm-custom-menu-text';
+      textSpan.style.cssText = "font-family: Roboto, 'Noto Sans', sans-serif; font-size: 14px; font-weight: 400; color: #FFFFFF; cursor: pointer;";
+      textSpan.textContent = item.label;
+
+      newItem.appendChild(iconSpan);
+      newItem.appendChild(textSpan);
 
       // Set hover listeners for background coloring and cursor pointer hardening
       newItem.addEventListener('mouseenter', () => {
