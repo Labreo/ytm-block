@@ -1,185 +1,105 @@
 # YTM Block 🚫🎵
 
-An elegant, secure, and lightweight MV3 browser extension for **YouTube Music** (`music.youtube.com`) that automatically skips tracks from blocked artists, songs, and albums, scrubs them from your "Up Next" queue, filters recommendation cards, and provides context-aware right-click entity blocking.
+<!-- INSERT BANNER IMAGE HERE (e.g. ![YTM Block Banner](https://your-github-url/banner.png)) -->
+<!-- Recommended banner dimension: 1280x640. You can place this file in your assets folder. -->
+![YTM Block Screenshot](icons/128.png)
 
-Built strictly using vanilla JS, HSL gradients, and CSS glassmorphism, YTM Block delivers a premium visual experience with zero tracker scripts, zero bloat, and fully localized storage synchronization.
+An elegant, secure, and lightweight browser extension for **YouTube Music** (`music.youtube.com`) that automatically skips tracks from blocked artists, songs, and albums, scrubs them from your "Up Next" queue, filters recommendation cards, and provides context-aware right-click entity blocking.
 
----
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-## 🚀 Key Features
+## 📥 Installation
 
-*   **🖱️ Multi-Entity Right-Click Context Blocking:** Block any resolved **Artist, Song, or Album** by right-clicking on elements (tracks, links, covers, playlists, or player bars). 
-    *   *Dynamic Native Menus:* Background service worker updates sub-menu visibility and titles on the fly (e.g., `Block Artist "Drake"`, `Block Album "Views"`, `Block Song "Hotline Bling"`).
-    *   *Custom DOM Menus:* Seamlessly injects crimson block shortcuts into YouTube Music's custom popups.
-    *   *Shadow DOM Escaping:* Crawls parent/host nodes across Shadow DOM boundaries (`current.parentElement || current.parentNode.host`) to query exact link attributes.
-    *   *Non-Destructive Dismissal:* Dismisses menus naturally by triggering a backdrop click, avoiding page layout lockups.
-*   **✨ Dynamic Glass Toast Notifications:** Renders elegant, animated floating capsule overlays with responsive state actions:
-    *   *Success:* Spawns a crimson notification (e.g., `"Blocked song: Hotline Bling"`) with an inline **Unblock** action button.
-    *   *Duplicate:* Yellow capsule informing you the item is already blocked.
-    *   *Failure:* Red capsule warning if context extraction yielded no data.
-*   **⚡ Prioritized Skip Engine:** Skips tracks automatically with a sub-second transition. Follows strict matching priorities:
-    1. **Blocked Songs:** Matches exactly or fuzzily (ignores punctuation and accents, cleans bracketed text like `[Remix]` or `(feat. ...)`).
-    2. **Blocked Albums:** Matches exact or substring album titles.
-    3. **Blocked Artists:** Matches partial substrings to cover collaborative tracks or split credits.
-*   **👁️ Queue Intelligence:** Scans "Up Next" lists dynamically, employing virtualization-safe cache checks.
-    *   *Visual Suppression:* Flags blocked tracks with a red left border, dimmed `0.35` opacity, line-through text, and an absolute-positioned `"BLOCKED"` capsule badge.
-    *   *Queue Stats Counter:* Injects a sleek stats capsule (e.g., `"3 blocked tracks hidden"`) into the queue header.
-    *   *Click Intercept:* Neutralizes user clicks on flagged tracks using capture-phase event blockers, spawning a warning toast notification instead.
-*   **🔍 Layout-Safe Recommendation Filtering:** Suppresses blocked items across home feeds, mixes, shelves, and search results.
-    *   *Grid Safeguard:* Instead of collapsing elements (which breaks column distributions), it blurs card contents (`12px`) and centers a custom translucent overlay reading `"Blocked by YTM Block"`.
-*   **🔒 Cooldown & Loop Protections:** Advanced stability guardrails:
-    *   *1s Skip Cooldown:* Prevents physical and automated skip double-triggering.
-    *   *Stuck DOM Protection:* Inhibits transition attempts if a track switch fails.
-    *   *Consecutive Skips Lock:* Pauses skipping for 8s if 5 tracks are skipped sequentially, protecting browser tabs from infinite autoplay loops.
-*   **📊 Categorized Blocking Dashboard Popup:** Redesigned popup UI displaying Blocked Songs, Albums, and Artists simultaneously.
-    *   *Real-time Filters:* The search box instantly filters all lists as you type.
-    *   *One-Click Blockers:* The Currently Playing panel displays live track data queried from tabs, sorting them dynamically (prioritizing audible/active tabs) with standalone add buttons.
-*   **🔄 Sync Persistence:** Operates on `chrome.storage.sync` to sync your blocklists automatically across all browsers signed into your account.
+<!-- INSERT FIREFOX ADD-ON STORE LINK HERE -->
+<a href="https://addons.mozilla.org/en-US/firefox/addon/ytm-block/"><img src="https://user-images.githubusercontent.com/585534/107280546-7b9b2a00-6a26-11eb-8f9f-f95932f4bfec.png" alt="Get YTM Block for Firefox" height="40"></a>
 
----
+<!-- INSERT EDGE ADD-ON STORE LINK HERE -->
+<a href="https://microsoftedge.microsoft.com/addons/detail/ytm-block/YOUR-ADDON-ID"><img src="https://user-images.githubusercontent.com/585534/107280673-a5ece780-6a26-11eb-9cc7-9fa9f9f81180.png" alt="Get YTM Block for Microsoft Edge" height="40"></a>
 
-## 📊 System Architecture
+<!-- INSERT CHROME WEB STORE LINK HERE -->
+<a href="https://chromewebstore.google.com/detail/ytm-block/YOUR-ADDON-ID"><img src="https://user-images.githubusercontent.com/585534/107280622-91a8ea80-6a26-11eb-8d07-77c548b28665.png" alt="Get YTM Block for Chrome" height="40"></a>
 
-```mermaid
-graph TD
-    %% Extension Popup Component
-    subgraph Popup Context [popup.html / popup.js]
-        A[Popup DomLoaded] -->|Query Storage| B[Dashboard Blocklists]
-        B -->|Build Lists| C[Songs, Albums, Artists Lists]
-        A -->|1s Poll Timer| D[queryCurrentlyPlaying]
-        D -->|Search Audible Tabs| E{Message Port}
-        E -->|getCurrentTrack| F[updateNowPlayingUI]
-        F -->|Render Info| G[Currently Playing Panel]
-        H[Filter Search / Add Manual] -->|addBlockedItem| B
-    end
 
-    %% Service Worker Context
-    subgraph Background Service Worker [background.js]
-        SW_Init[onInstalled] -->|Register Menus| SW_Menu[chrome.contextMenus]
-        SW_Menu -->|onClicked| SW_Click[handleBlockAction]
-        SW_Click -->|tabs.sendMessage| E
-        SW_Click -->|Process Block| SW_Save[addBlockedItem]
-        SW_Save -->|Save Storage| SW_Sync[chrome.storage.sync]
-        SW_Save -->|tabs.sendMessage| SW_Toast[showToast Message]
-    end
+## 📖 Project Purpose
 
-    %% Web Content Script Context
-    subgraph Content Script Context [content.js]
-        I[Injected @ document_idle] -->|init| J[getBlocklist]
-        J -->|chrome.storage.sync| K[Sync Cache]
-        
-        %% Right-Click Context Cache
-        I -->|setupRightClickListener| RC_Listen[contextmenu event]
-        RC_Listen -->|Escape Shadow DOM| RC_Grab[extractContextData]
-        RC_Grab -->|Climb closest DOM| RC_Cache[lastRightClickedContext]
-        
-        %% Player Observer Loop
-        I -->|setupObserver| L[Player MutationObserver]
-        L -->|characterData Subtree| M[getCurrentPlayingInfo]
-        M -->|Compare Cache| N{shouldSkipTrack?}
-        N -->|YES| O[isPlaybackActive?]
-        O -->|YES| P[skipTrack]
-        P -->|nextBtn.click| Q[Trigger Track Skip]
-        
-        %% Queue Observer Loop
-        I -->|setupQueueObserver| R[Queue MutationObserver]
-        R -->|Virtualization Check| S[scrubQueue]
-        S -->|Stats & Click block| T[getQueueItemMetadata]
-        T -->|Compare Cache| U{shouldSkipTrack?}
-        U -->|YES| V[Apply .ytm-blocked-queue-item CSS]
-        
-        %% Recommendation Observer Loop
-        I -->|setupRecObserver| RO[Rec MutationObserver]
-        RO -->|Debounced 500ms| RS[scrubRecommendations]
-        RS -->|Blur card & Apply Overlay| RV[Apply .ytm-blocked-rec-card]
-        
-        %% Toast notification renderer
-        SW_Toast -.->|Message Port| W[setupMessageListener]
-        W -.->|Trigger showToast| Toast_UI[showToastNotification rendering]
-    end
+YouTube Music is great, but managing playback quality while coding or studying often means being forced to listen to artists, tracks, or albums you dislike. **YTM Block** solves this by integrating directly with YouTube Music's interface and underlying player.
 
-    %% Sync Bridge
-    B <-->|chrome.storage.onChanged| K
-    SW_Sync <-->|chrome.storage.onChanged| K
-```
+With a single right-click or dashboard update, you can permanently block any artist, track, or album. YTM Block will ensure they are automatically skipped, hidden, and filtered with zero distraction, allowing you to stay focused on your work.
+
+### ✨ Features
+* **🖱️ Multi-Entity Right-Click Context Blocking:** Block any Artist, Song, or Album by right-clicking elements directly on the YouTube Music page and selecting context options. Includes automatic Shadow DOM crawling.
+* **🔔 Premium Capsule Toasts:** Floating glass notifications with blur-filters and custom icons showing three distinct states: Successfully Blocked (with a one-click "Unblock" button inside the toast!), Already Blocked, and Detection Failure.
+* **⚡ Prioritized Auto-Skipping:** Programmatic skip engine respects blocklists in strict order of precedence (Blocked Songs -> Blocked Albums -> Blocked Artists) with sub-second response times and fuzzy-normalized song matching.
+* **👁️ Queue Intelligence:** Visually dims and crosses out blocked songs inside your "Up Next" panel, injects an absolute-positioned `"BLOCKED"` capsule badge, and displays a counter badge in the header.
+* **🚫 Click Protection:** Restricts clicks on blocked queue elements, preventing accidental selections.
+* **🔍 Recommendation Filtering:** Visual layout-safe suppression blurs blocked items on home grids, mixes, and shelves with a custom translucent overlay badge, preserving grid alignment.
+* **🎨 Premium Glass Dashboard UI:** Multi-list dashboard popup showing Blocked Songs, Blocked Albums, and Blocked Artists concurrently, with real-time search filtering, tag removal fade animations, and a Live Now Playing Card.
+* **🔒 100% Local & Secure:** No tracker scripts, no third-party libraries, and zero external network calls. Your blocklist syncs securely using Chrome's native storage profile bridge.
 
 ---
 
-## 🛠️ Installation Instructions
+## 🛠️ Tech Stack
 
-### Google Chrome & Chromium-based Browsers (Brave, Edge, Opera)
-1.  Download or clone this repository to your local system.
-2.  Open Chrome and navigate to `chrome://extensions/`.
-3.  In the top-right corner, toggle the **Developer mode** switch to **ON**.
-4.  In the top-left corner, click **Load unpacked**.
-5.  Select the `ytm-block` directory containing `manifest.json`.
-6.  The extension is now ready! Pin it to your toolbar.
-
-### Mozilla Firefox
-1.  Open Firefox and type `about:debugging` in the URL bar.
-2.  Click **This Firefox** in the left sidebar.
-3.  Click **Load Temporary Add-on...** under the Temporary Extensions section.
-4.  Navigate to the `ytm-block` directory and select `manifest.json` (or the packed `.zip` / `.xpi` archive).
-5.  Open `music.youtube.com` and click the extensions icon to configure.
+This project is built using:
+* **Vanilla JavaScript** & **CSS** (utilizes custom inline styling to pierce Shadow DOM boundaries).
+* **Manifest V3** (Chrome, Edge) and **Firefox MV3 compatibility** (via separate manifests).
+* **Bash** for standard build automation without heavy webpack/bundlers.
 
 ---
 
-## 🛡️ Permissions Breakdown
+## 💻 Local Setup Instructions
 
-To guarantee complete privacy, YTM Block requests the absolute minimum permissions required to perform its functions:
+These instructions have been designed and tested for a clean local machine environment.
 
-| Permission | Scope | Technical Purpose |
-| :--- | :--- | :--- |
-| `storage` | Persistent Sync | Saves your list of blocked artists securely. Uses `storage.sync` to mirror your blocklist across multiple browsers. |
-| `activeTab` | Tab Querying | Used strictly inside the popup to query the active tab's URL and title for checking if you are currently on YouTube Music. |
-| `contextMenus` | Context Menu | Safely registers the custom right-click options restricted strictly to YouTube Music viewports. |
-| `scripting` | Advanced Script Execution | Declared for potential dynamically executed scripts or advanced frame operations. |
-| `https://music.youtube.com/*` | Content Injection | Allows the extension to safely inject `content.js` and spawn `background.js` on pages match. The script is sandboxed and never makes external requests. |
+### Prerequisites
+* Git
+* A browser (Chrome, Edge, or Firefox)
 
----
+### Step-by-Step Setup
 
-## 📷 Screenshots Section
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Labreo/ytm-block.git
+   cd ytm-block
+   ```
 
-*Add your promotional screenshot assets here. Recommended dimensions: `1280x800` (Chrome Web Store) and `1280x800` (Firefox AMO).*
+2. **Build the extension:**
+   Generate the clean, store-ready browser distributions:
+   ```bash
+   chmod +x build.sh
+   ./build.sh
+   ```
+   *This will create a `dist/` directory containing `chrome/`, `firefox/`, and `edge/` builds, along with release zip archives.*
 
-| 1. Premium Dark Popup UI | 2. Dynamic Unblock Toast Alert |
-| :---: | :---: |
-| ![Popup UI Placeholder](icons/128.png) | ![Toast UI Placeholder](icons/128.png) |
-| *Elegant Glass Now Playing Panel & tag grid* | *Floating glass capsule alert with unblock action shortcut* |
-
----
-
-## 🔍 Troubleshooting Guide
-
-#### ❓ The popup displays "Disconnected" and "Open YouTube Music tab"
-*   **Cause:** The extension popup cannot find an active tab pointed to `https://music.youtube.com/*`.
-*   **Fix:** Open a tab on [music.youtube.com](https://music.youtube.com/), start playing any track, and click the popup again.
-
-#### ❓ Right-clicking an artist link did not detect the correct artist name
-*   **Cause:** YouTube Music uses complex DOM element layers. The event capture might have targeted an inner text node or cover image overlay.
-*   **Fix:** Ensure you are right-clicking directly on or near the artist title text node. The crawler will traverse upwards using `closest()` to locate the channel metadata link. If extraction yields no name, you will see a red "Could not detect artist name" toast warning.
-
-#### ❓ A song by a blocked artist started playing and didn't skip
-*   **Cause:** Playback might be paused, or the content script was injected before the DOM loaded the next-button wrapper.
-*   **Fix:** 
-    1. Verify that the song is **not paused**. The skip engine is programmatically locked when playback is paused to preserve user focus.
-    2. Open your browser console (`Cmd + Option + J` or `Ctrl + Shift + J`) and verify the log: `[YTM Block] next-click cooldown active`.
-    3. Make sure the artist's spelling in your blocklist is correct. (Partial matching is supported, but typos will result in a mismatch).
-
-#### ❓ The blocked items inside the "Up Next" queue are not being dimmed
-*   **Cause:** YouTube Music uses dynamic virtualization to render elements on scroll. Sometimes the queue container has not been fully rendered in the DOM when the extension initializes.
-*   **Fix:** Toggle the **Queue** list icon in the bottom-right corner of the player to force a DOM refresh, or refresh the page. The automatic queue observer will instantly lock onto the container and dim the elements.
+3. **Load the extension manually into your browser:**
+   * **For Chrome:** Navigate to `chrome://extensions/`, toggle on "Developer mode" in the top right, click "Load unpacked", and select the `dist/chrome/` folder.
+   * **For Edge:** Navigate to `edge://extensions/`, toggle on "Developer mode", click "Load unpacked", and select `dist/edge/`.
+   * **For Firefox:** Navigate to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on", and select the `manifest.json` inside the `dist/firefox/` folder.
 
 ---
 
-## 📦 Packaging and Distribution
+## 🤝 Contribution Guidelines
 
-See [RELEASE_ASSETS.md](release_assets.md) for Chrome Web Store & Firefox AMO packaging instructions, AMO MV3 compatibility wrappers, and the store listing copy.
+Contributions, issues, and feature requests are highly encouraged! 
+
+We follow standard GitHub flow and require that all pull requests pass basic code style and lint check requirements. Before starting major work, please review our comprehensive **[CONTRIBUTING.md](CONTRIBUTING.md)** (create this file if not already present) for our full code style rules, PR expectations, and standard practices.
 
 ---
 
-## 📄 License & Privacy
+## 💬 Contact & Support
 
-This extension runs **100% locally**. It contains no analytics, no tracker scripts, and never transmits your data or browsing history to external servers. Your blocked artist list remains local to your browser and Chrome profile sync nodes.
+**Have questions or want to discuss a major feature?**
+Reach out to me directly on **Discord**: `.kakaroth`
 
-Licensed under the MIT License. Developed with care.
+If this extension makes your daily workflow a little smoother, consider supporting the development! 
+
+[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://www.buymeacoffee.com/kakeroth)
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+**Built by Kanak Waradkar**

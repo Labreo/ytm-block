@@ -51,6 +51,8 @@ class YTMBlockController {
 
     // Context Menu Temporary Storage
     this.lastRightClickedContext = null; // Caches the right-clicked music entity context temporarily
+    this.menuPollInterval = null;
+    this.menuPollTimeout = null;
     
     // Hardening Guards
     this.initialized = false;
@@ -310,26 +312,27 @@ class YTMBlockController {
         box-sizing: border-box !important;
       }
       .ytm-custom-menu-item:hover {
-        background-color: rgba(255, 255, 255, 0.08) !important;
+        background-color: rgba(255, 255, 255, 0.1) !important;
       }
       .ytm-custom-menu-icon {
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
-        margin-right: 12px !important;
+        margin-right: 16px !important;
         width: 24px !important;
         height: 24px !important;
-        color: #FF1E46 !important;
+        color: rgba(255, 255, 255, 0.7) !important;
+        cursor: pointer !important;
       }
       .ytm-custom-menu-text {
         font-family: Roboto, 'Noto Sans', sans-serif !important;
         font-size: 14px !important;
         font-weight: 400 !important;
-        color: #E5E7EB !important;
-        transition: color 0.15s ease !important;
+        color: #FFFFFF !important;
+        cursor: pointer !important;
       }
-      .ytm-custom-menu-item:hover .ytm-custom-menu-text {
-        color: #FF1E46 !important;
+      .ytm-custom-menu-icon svg {
+        cursor: pointer !important;
       }
     `;
     document.head.appendChild(style);
@@ -386,6 +389,14 @@ class YTMBlockController {
       if (this.queueCheckInterval) {
         clearInterval(this.queueCheckInterval);
         this.queueCheckInterval = null;
+      }
+      if (this.menuPollInterval) {
+        clearInterval(this.menuPollInterval);
+        this.menuPollInterval = null;
+      }
+      if (this.menuPollTimeout) {
+        clearTimeout(this.menuPollTimeout);
+        this.menuPollTimeout = null;
       }
       this.observerLifecycle.track = false;
       this.observerLifecycle.queue = false;
@@ -710,8 +721,8 @@ class YTMBlockController {
         }
 
         if (hasPopupChange && this.isContextValid()) {
-          this.log('debug', 'Detected custom popup menu renderer. Injecting options...');
-          this.injectCustomMenuItem();
+          this.log('debug', 'Detected custom popup menu renderer. Triggering poll...');
+          this.startMenuInjectionPoll();
         }
       });
 
@@ -1048,31 +1059,99 @@ class YTMBlockController {
         } else {
           console.log('%c[YTM Block]%c Could not extract context data from click.', 'color: #EF4444; font-weight: bold;', 'color: default;');
         }
+
+        // Trigger immediate menu polling to inject custom context menus
+        this.startMenuInjectionPoll();
       }
     }, true);
   }
 
   /**
+   * Helper utility to locate the menu items container in YTM custom context menus.
+   * Handles Light DOM queries, nested queries, and pierces polymer Shadow DOM roots.
+   */
+  findMenuItemsContainer() {
+    // 1. Try standard Light DOM queries
+    let container = document.querySelector('ytmusic-menu-popup-renderer #items') || 
+                    document.querySelector('#items.ytmusic-menu-popup-renderer') ||
+                    document.querySelector('tp-yt-paper-listbox#items');
+    if (container) return container;
+
+    // 2. Try piercing the shadow DOM of ytmusic-menu-popup-renderer if it exists
+    const popupRenderer = document.querySelector('ytmusic-menu-popup-renderer');
+    if (popupRenderer) {
+      if (popupRenderer.shadowRoot) {
+        container = popupRenderer.shadowRoot.querySelector('#items') || 
+                    popupRenderer.shadowRoot.querySelector('tp-yt-paper-listbox#items');
+        if (container) return container;
+      }
+      container = popupRenderer.querySelector('#items') || 
+                  popupRenderer.querySelector('tp-yt-paper-listbox#items');
+      if (container) return container;
+    }
+
+    // 3. Fallback to any paper-listbox active in the DOM
+    const paperListbox = document.querySelector('tp-yt-paper-listbox');
+    if (paperListbox) return paperListbox;
+
+    return null;
+  }
+
+  /**
+   * Starts a short-term polling loop to attempt custom menu injection.
+   * This is extremely robust against Element reuse, Shadow DOM timing delay, and dynamic updates.
+   */
+  startMenuInjectionPoll() {
+    this.log('debug', 'Starting menu injection poll...');
+    if (this.menuPollInterval) clearInterval(this.menuPollInterval);
+    if (this.menuPollTimeout) clearTimeout(this.menuPollTimeout);
+
+    let attempts = 0;
+    const maxAttempts = 30; // 30 attempts * 50ms = 1.5 seconds
+
+    this.menuPollInterval = setInterval(() => {
+      attempts++;
+      const container = this.findMenuItemsContainer();
+      if (container) {
+        const injected = this.injectCustomMenuItem();
+        if (injected) {
+          this.log('debug', `Injected successfully via poll on attempt ${attempts}. Stopping poll.`);
+          clearInterval(this.menuPollInterval);
+          this.menuPollInterval = null;
+          return;
+        }
+      }
+
+      if (attempts >= maxAttempts) {
+        this.log('debug', 'Stopping menu injection poll: max attempts reached.');
+        clearInterval(this.menuPollInterval);
+        this.menuPollInterval = null;
+      }
+    }, 50);
+
+    // Safety timeout to clean up after 2 seconds
+    this.menuPollTimeout = setTimeout(() => {
+      if (this.menuPollInterval) {
+        clearInterval(this.menuPollInterval);
+        this.menuPollInterval = null;
+      }
+    }, 2000);
+  }
+
+  /**
    * Instantly injects custom crimson "Block/Unblock" options into 
    * YouTube Music's custom DOM context menu overlay.
-   * Retries dynamically if the popup list elements are not yet fully populated in the DOM.
+   * Returns true on success or if already injected, false if cannot inject.
    */
-  injectCustomMenuItem(attempts = 0) {
-    const menuList = document.querySelector('ytmusic-menu-popup-renderer #items') || 
-                     document.querySelector('#items.ytmusic-menu-popup-renderer') ||
-                     document.querySelector('tp-yt-paper-listbox#items');
+  injectCustomMenuItem() {
+    const menuList = this.findMenuItemsContainer();
     
     if (!menuList) {
-      if (attempts < 15) {
-        setTimeout(() => this.injectCustomMenuItem(attempts + 1), 30);
-      } else {
-        this.log('warn', 'Could not locate menu list container (#items) after 15 attempts.');
-      }
-      return;
+      return false;
     }
 
     // Check if already injected to avoid duplicate items
-    if (menuList.querySelector('[data-ytm-block-injected="true"]')) return;
+    if (menuList.querySelector('[data-ytm-block-injected="true"]')) return true;
 
     // Retrieve last clicked/right-clicked context
     const context = this.lastRightClickedContext;
@@ -1084,7 +1163,7 @@ class YTMBlockController {
         itemsToInject.push({
           type: 'artist',
           action: isBlocked ? 'unblock' : 'block',
-          label: isBlocked ? `Unblock Artist (${context.artist})` : `Block Artist (${context.artist})`,
+          label: isBlocked ? 'Unblock Artist' : 'Block Artist',
           value: context.artist
         });
       }
@@ -1093,7 +1172,7 @@ class YTMBlockController {
         itemsToInject.push({
           type: 'song',
           action: isBlocked ? 'unblock' : 'block',
-          label: isBlocked ? `Unblock Song (${context.song})` : `Block Song (${context.song})`,
+          label: isBlocked ? 'Unblock Song' : 'Block Song',
           value: context.song
         });
       }
@@ -1102,7 +1181,7 @@ class YTMBlockController {
         itemsToInject.push({
           type: 'album',
           action: isBlocked ? 'unblock' : 'block',
-          label: isBlocked ? `Unblock Album (${context.album})` : `Block Album (${context.album})`,
+          label: isBlocked ? 'Unblock Album' : 'Block Album',
           value: context.album
         });
       }
@@ -1116,7 +1195,7 @@ class YTMBlockController {
         itemsToInject.push({
           type: 'artist',
           action: isBlocked ? 'unblock' : 'block',
-          label: isBlocked ? `Unblock Artist (${activeArtist})` : `Block Artist (${activeArtist})`,
+          label: isBlocked ? 'Unblock Artist' : 'Block Artist',
           value: activeArtist
         });
       }
@@ -1126,7 +1205,7 @@ class YTMBlockController {
         itemsToInject.push({
           type: 'song',
           action: isBlocked ? 'unblock' : 'block',
-          label: isBlocked ? `Unblock Song (${activeSong})` : `Block Song (${activeSong})`,
+          label: isBlocked ? 'Unblock Song' : 'Block Song',
           value: activeSong
         });
       }
@@ -1136,7 +1215,7 @@ class YTMBlockController {
         itemsToInject.push({
           type: 'album',
           action: isBlocked ? 'unblock' : 'block',
-          label: isBlocked ? `Unblock Album (${activeAlbum})` : `Block Album (${activeAlbum})`,
+          label: isBlocked ? 'Unblock Album' : 'Block Album',
           value: activeAlbum
         });
       }
@@ -1149,19 +1228,44 @@ class YTMBlockController {
       newItem.setAttribute('data-ytm-block-injected', 'true');
       newItem.setAttribute('role', 'menuitem');
 
+      // Apply exact styles inline to pierce Shadow DOM boundary styling limitations
+      newItem.style.display = 'flex';
+      newItem.style.alignItems = 'center';
+      newItem.style.padding = '0 24px 0 16px';
+      newItem.style.cursor = 'pointer';
+      newItem.style.backgroundColor = 'transparent';
+      newItem.style.transition = 'background-color 0.15s ease';
+      newItem.style.userSelect = 'none';
+      newItem.style.height = '48px';
+      newItem.style.boxSizing = 'border-box';
+
       // Use a custom icon (crossed out circle for block, checkmark or minus for unblock)
-      const strokeColor = item.action === 'unblock' ? '#10B981' : '#FF1E46';
       newItem.innerHTML = `
-        <span class="ytm-custom-menu-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <span class="ytm-custom-menu-icon" style="display: inline-flex; align-items: center; justify-content: center; margin-right: 16px; width: 24px; height: 24px; color: rgba(255, 255, 255, 0.7); cursor: pointer;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="cursor: pointer;">
             ${item.action === 'unblock' 
               ? `<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>`
               : `<circle cx="12" cy="12" r="9"></circle><line x1="5.64" y1="5.64" x2="18.36" y2="18.36"></line>`
             }
           </svg>
         </span>
-        <span class="ytm-custom-menu-text" style="color: ${strokeColor};">${item.label}</span>
+        <span class="ytm-custom-menu-text" style="font-family: Roboto, 'Noto Sans', sans-serif; font-size: 14px; font-weight: 400; color: #FFFFFF; cursor: pointer;">${item.label}</span>
       `;
+
+      // Set hover listeners for background coloring and cursor pointer hardening
+      newItem.addEventListener('mouseenter', () => {
+        newItem.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        newItem.style.cursor = 'pointer';
+        const iconSpan = newItem.querySelector('.ytm-custom-menu-icon');
+        const textSpan = newItem.querySelector('.ytm-custom-menu-text');
+        const svgEl = newItem.querySelector('svg');
+        if (iconSpan) iconSpan.style.cursor = 'pointer';
+        if (textSpan) textSpan.style.cursor = 'pointer';
+        if (svgEl) svgEl.style.cursor = 'pointer';
+      });
+      newItem.addEventListener('mouseleave', () => {
+        newItem.style.backgroundColor = 'transparent';
+      });
 
       let actionTriggered = false;
       const handleAction = (e) => {
@@ -1197,7 +1301,9 @@ class YTMBlockController {
 
     if (itemsToInject.length > 0) {
       this.log('debug', `Successfully injected ${itemsToInject.length} custom block options into YTM dropdown.`);
+      return true;
     }
+    return false;
   }
 
   /**
@@ -1297,6 +1403,9 @@ class YTMBlockController {
     } catch (e) {
       console.warn('[YTM Block] Failed to send right-click context to background script:', e);
     }
+
+    // Trigger immediate menu polling to inject custom context menus
+    this.startMenuInjectionPoll();
   }
 
   /**
@@ -2032,35 +2141,62 @@ class YTMBlockController {
   }
 
   /**
+   * Normalizes a song title to a base form, stripping parenthetical/bracketed variants,
+   * feat tags, remastered tags, and other typical YouTube Music title additions.
+   * @param {string} title - The raw song title.
+   * @returns {string} The normalized song title.
+   */
+  normalizeSongTitle(title) {
+    if (!title) return '';
+    let cleaned = title.toLowerCase();
+
+    // 1. Remove parenthetical/bracketed comments about "official video", "official audio", "remastered", "lyric video", "radio edit", etc.
+    cleaned = cleaned.replace(/[\(\[][^\)\]]*(official|video|audio|lyric|remaster|radio|edit|mono|stereo|anniversary|deluxe|version|mix|feat|ft)[^\)\]]*[\)\]]/g, '');
+
+    // 2. Remove trailing / dashed descriptors like "- Remastered", "- Radio Edit", "- feat. ...", "- Single Version", "- Deluxe Edition"
+    cleaned = cleaned.replace(/\-\s*(remaster|radio|edit|mono|stereo|feat|ft|single|deluxe|version|mix|official).*/g, '');
+
+    // 3. Remove common keywords directly if they are still present
+    cleaned = cleaned.replace(/\b(official audio|official video|official music video|lyric video|radio edit|remastered|remaster|single version|deluxe edition)\b/g, '');
+
+    // 4. Remove features (e.g. "feat. ...", "featuring ...", "ft. ...")
+    cleaned = cleaned.replace(/\b(feat|featuring|ft)\b.*/g, '');
+
+    // 5. Remove all punctuation and special characters
+    cleaned = cleaned.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"\'\’]/g, '');
+
+    // 6. Normalize multiple whitespaces to a single space
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+    return cleaned;
+  }
+
+  /**
    * Evaluates if the given song title matches any blocked song rules (exact or fuzzy matching).
    * @param {string} songTitle - The raw song title.
    * @returns {string|null} The matched block rule value, or null.
    */
   shouldBlockSong(songTitle) {
-    if (!songTitle || this.blockedSongs.length === 0) return null;
-    const titleLower = songTitle.toLowerCase().trim();
+    if (!songTitle || this.blockedSongs.length === 0) {
+      console.log('[YTM Block Debug] shouldBlockSong: songTitle or blockedSongs is empty.');
+      return null;
+    }
     
-    // Clean string helper for fuzzy matching (removes standard punctuation / extras like feat, remix, bracketed info)
-    const cleanString = (str) => {
-      return str.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]]/g, "").replace(/\s+/g, " ").trim();
-    };
-    
-    const cleanedTitle = cleanString(titleLower);
+    const normalizedInput = this.normalizeSongTitle(songTitle);
+    console.log('[YTM Block Debug] current song:', songTitle);
+    console.log('[YTM Block Debug] normalized song:', normalizedInput);
+    console.log('[YTM Block Debug] blockedSongs array:', this.blockedSongs);
 
     for (const blocked of this.blockedSongs) {
-      const blockedLower = blocked.toLowerCase().trim();
-      const cleanedBlocked = cleanString(blockedLower);
-
-      // Exact match
-      if (titleLower === blockedLower || cleanedTitle === cleanedBlocked) {
-        return blocked;
-      }
-      
-      // Fuzzy: Substring match on clean titles or title includes blocked term
-      if (titleLower.includes(blockedLower) || cleanedTitle.includes(cleanedBlocked)) {
+      const normalizedBlocked = this.normalizeSongTitle(blocked);
+      if (normalizedInput === normalizedBlocked || 
+          normalizedInput.includes(normalizedBlocked) || 
+          normalizedBlocked.includes(normalizedInput)) {
+        console.log('[YTM Block Debug] shouldBlockSong result:', blocked);
         return blocked;
       }
     }
+    console.log('[YTM Block Debug] shouldBlockSong result: null');
     return null;
   }
 
@@ -2095,22 +2231,29 @@ class YTMBlockController {
     // 1. Evaluate Song Title Blocks (Priority 1)
     const matchedSong = this.shouldBlockSong(title);
     if (matchedSong) {
-      console.log('[YTM Block Debug] shouldSkipTrack matched song:', matchedSong);
+      console.log('[YTM Block Debug] skip reason: song matched block list');
+      console.log('[YTM Block Debug] final shouldSkipTrack decision: SKIP');
       return { shouldSkip: true, matchedTerm: matchedSong, matchedType: 'song' };
     }
 
     // 2. Evaluate Album Blocks (Priority 2)
     const matchedAlbum = this.shouldBlockAlbum(album);
     if (matchedAlbum) {
+      console.log('[YTM Block Debug] skip reason: album matched block list');
+      console.log('[YTM Block Debug] final shouldSkipTrack decision: SKIP');
       return { shouldSkip: true, matchedTerm: matchedAlbum, matchedType: 'album' };
     }
 
     // 3. Evaluate Artist Blocks (Priority 3)
     const matchedArtist = this.shouldBlockArtist(artist);
     if (matchedArtist) {
+      console.log('[YTM Block Debug] skip reason: artist matched block list');
+      console.log('[YTM Block Debug] final shouldSkipTrack decision: SKIP');
       return { shouldSkip: true, matchedTerm: matchedArtist, matchedType: 'artist' };
     }
 
+    console.log('[YTM Block Debug] skip reason: none');
+    console.log('[YTM Block Debug] final shouldSkipTrack decision: PLAY');
     return { shouldSkip: false, matchedTerm: null, matchedType: null };
   }
 
