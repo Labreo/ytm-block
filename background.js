@@ -1,5 +1,5 @@
 /**
- * YTM Block - Service Worker / Background Script (Phase 7: Context Menus & Dynamic Toasts)
+ * YTM Block - Service Worker / Background Script (Hardened Phase 7)
  * 
  * Runs in the background of Manifest V3, spawning on demand when registered events
  * are fired and terminating when idle to optimize browser resource utilization.
@@ -10,33 +10,67 @@
 // Import the shared storage helper library
 importScripts('storage.js');
 
+// Troubleshooting and logging configuration
+const DEBUG = true; // Toggle for verbose debugging logs
+
+const Logger = {
+  info: (msg, ...args) => {
+    console.log(`%c[YTM Block Info]%c ${msg}`, 'color: #38BDF8; font-weight: bold;', 'color: default;', ...args);
+  },
+  debug: (msg, ...args) => {
+    if (DEBUG) {
+      console.log(`%c[YTM Block Debug]%c ${msg}`, 'color: #A78BFA; font-weight: bold;', 'color: default;', ...args);
+    }
+  },
+  warn: (msg, ...args) => {
+    console.warn(`%c[YTM Block Warn]%c ${msg}`, 'color: #FBBF24; font-weight: bold;', 'color: default;', ...args);
+  },
+  error: (msg, ...args) => {
+    console.error(`%c[YTM Block Error]%c ${msg}`, 'color: #FF1E46; font-weight: bold;', 'color: default;', ...args);
+  }
+};
+
+// Diagnostics: Log startup telemetry
+Logger.info(`Service worker top-level execution initialized. Wake Reason: Startup/Event Trigger. Timestamp: ${new Date().toISOString()}`);
+
+// Start a runtime heartbeat log interval that runs as long as the service worker is awake
+let heartbeatInterval = null;
+function startHeartbeat() {
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(() => {
+    Logger.debug(`Heartbeat: Service worker is awake and healthy. Uptime check: ${new Date().toISOString()}`);
+  }, 10000); // Heartbeat every 10 seconds
+}
+startHeartbeat();
+
 // Unique IDs for the context menu items
 const CONTEXT_MENU_PARENT_ID = "ytm_block_parent";
 const CONTEXT_MENU_ARTIST_ID = "block_artist";
 const CONTEXT_MENU_SONG_ID = "block_song";
 const CONTEXT_MENU_ALBUM_ID = "block_album";
 
-console.log("[YTM Block Background] Service worker evaluated/restarted.");
+// Concurrency guard to prevent parallel initialization races
+let activeInitPromise = null;
 
 /**
  * Creates the context menus after removing any existing ones to avoid duplicate ID errors.
  */
 async function createMenus() {
-  console.log("[YTM Block Background] Clearing existing context menus...");
+  Logger.debug("Clearing existing context menus...");
   try {
     await new Promise((resolve) => {
       chrome.contextMenus.removeAll(() => {
         const err = chrome.runtime.lastError;
         if (err) {
-          console.warn("[YTM Block Background] Warning during removeAll:", err.message);
+          Logger.warn("Warning during removeAll:", err.message);
         } else {
-          console.log("[YTM Block Background] All context menus removed.");
+          Logger.debug("All existing context menus removed successfully.");
         }
         resolve();
       });
     });
 
-    console.log("[YTM Block Background] Registering context menus...");
+    Logger.debug("Registering context menus...");
 
     // Create the parent menu
     await new Promise((resolve) => {
@@ -48,15 +82,15 @@ async function createMenus() {
       }, () => {
         const err = chrome.runtime.lastError;
         if (err) {
-          console.error("[YTM Block Background] Failed to create parent menu:", err.message);
+          Logger.error("Failed to create parent menu:", err.message);
         } else {
-          console.log("[YTM Block Background] Parent menu created.");
+          Logger.debug("Parent menu created.");
         }
         resolve();
       });
     });
 
-    // Create child menus (make them visible by default with generic titles)
+    // Create child menus (initially visible by default with generic titles)
     const childMenus = [
       { id: CONTEXT_MENU_ARTIST_ID, title: "Block Artist" },
       { id: CONTEXT_MENU_SONG_ID, title: "Block Song" },
@@ -74,26 +108,47 @@ async function createMenus() {
         }, () => {
           const err = chrome.runtime.lastError;
           if (err) {
-            console.error(`[YTM Block Background] Failed to create child menu ${menu.id}:`, err.message);
+            Logger.error(`Failed to create child menu ${menu.id}:`, err.message);
           } else {
-            console.log(`[YTM Block Background] Child menu ${menu.id} created.`);
+            Logger.debug(`Child menu ${menu.id} created.`);
           }
           resolve();
         });
       });
     }
 
-    console.log("[YTM Block Background] All context menus initialized successfully.");
+    Logger.info("All context menus registered successfully.");
   } catch (error) {
-    console.error("[YTM Block Background] Critical error during context menu creation:", error);
+    Logger.error("Critical error during context menu creation:", error);
   }
 }
 
-// Concurrency guard to prevent parallel initialization races
-let activeInitPromise = null;
+/**
+ * Verifies that the context menus actually exist in Chrome's registry.
+ * If verification fails, it recreates them.
+ */
+async function verifyMenus() {
+  return new Promise((resolve) => {
+    Logger.debug("Verifying context menu registry...");
+    chrome.contextMenus.update(CONTEXT_MENU_PARENT_ID, {}, () => {
+      const err = chrome.runtime.lastError;
+      if (err) {
+        Logger.warn("Menu verification failed, recreating menus. Error:", err.message);
+        createMenus().then(resolve);
+      } else {
+        Logger.debug("Menu verification succeeded: parent menu exists.");
+        resolve();
+      }
+    });
+  });
+}
+
+/**
+ * Concurrency-guarded menu initialization pipeline.
+ */
 async function safeInitializeMenus() {
   if (activeInitPromise) {
-    console.log("[YTM Block Background] Menu initialization already in progress. Awaiting existing promise...");
+    Logger.debug("Menu initialization already in progress. Awaiting existing promise...");
     return activeInitPromise;
   }
   activeInitPromise = createMenus();
@@ -104,30 +159,72 @@ async function safeInitializeMenus() {
   }
 }
 
+/**
+ * Centralized extension startup and verification logic.
+ */
+async function initializeExtension() {
+  Logger.info("Starting centralized initializeExtension...");
+  try {
+    await safeInitializeMenus();
+    await verifyMenus();
+    Logger.info("Centralized initializeExtension completed.");
+  } catch (error) {
+    Logger.error("Fatal error during initializeExtension:", error);
+  }
+}
+
+// ==========================================
+// RUNTIME LIFECYCLE LISTENERS
+// ==========================================
+
 // 1. Initialize on extension install or update
 chrome.runtime.onInstalled.addListener((details) => {
-  console.log(`[YTM Block Background] Extension installed/updated (Reason: ${details.reason}). Initializing menus.`);
-  safeInitializeMenus();
+  Logger.info(`onInstalled event fired (Reason: ${details.reason}). Initializing extension...`);
+  initializeExtension();
 });
 
 // 2. Initialize on browser startup
 chrome.runtime.onStartup.addListener(() => {
-  console.log("[YTM Block Background] Browser startup. Initializing menus.");
-  safeInitializeMenus();
+  Logger.info("onStartup event fired. Initializing extension...");
+  initializeExtension();
 });
 
 // 3. Initialize on Service Worker activation
 self.addEventListener('activate', (event) => {
-  console.log("[YTM Block Background] Service worker activated. Initializing menus.");
-  event.waitUntil(safeInitializeMenus());
+  Logger.info("Service worker 'activate' event fired. Ensuring extension is initialized...");
+  event.waitUntil(initializeExtension());
 });
 
 // 4. Initialize immediately on top-level script evaluation (covers wakeup from suspension)
-safeInitializeMenus();
+initializeExtension();
+
+// ==========================================
+// ERROR BOUNDARY WRAPPERS & EVENT HANDLERS
+// ==========================================
+
+/**
+ * Wraps a listener callback with a try/catch error boundary to avoid service worker crashes.
+ */
+function safeEventListener(listenerName, callback) {
+  return (...args) => {
+    Logger.debug(`Event received: ${listenerName}`);
+    try {
+      const result = callback(...args);
+      if (result instanceof Promise) {
+        result.catch(err => {
+          Logger.error(`Error in async handler for ${listenerName}:`, err);
+        });
+      }
+      return result;
+    } catch (err) {
+      Logger.error(`Error in listener ${listenerName}:`, err);
+    }
+  };
+}
 
 // Listen for clicks on context menu items
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  console.log(`[YTM Block Background] Context menu clicked: id="${info.menuItemId}" on tabId=${tab ? tab.id : 'unknown'}`);
+chrome.contextMenus.onClicked.addListener(safeEventListener('contextMenus.onClicked', async (info, tab) => {
+  Logger.info(`Context menu clicked: id="${info.menuItemId}" on tabId=${tab ? tab.id : 'unknown'}`);
   if (!tab) return;
 
   try {
@@ -136,7 +233,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       chrome.tabs.sendMessage(tab.id, { action: "getCurrentTrack" }, (response) => {
         const err = chrome.runtime.lastError;
         if (err || !response) {
-          console.warn("[YTM Block Background] Content script unresponsive or did not return context. Falling back to local storage.", err ? err.message : "");
+          Logger.warn("Content script unresponsive or did not return context. Falling back to local storage.", err ? err.message : "");
           resolve(null);
         } else {
           resolve({
@@ -156,7 +253,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 
     if (!ctx) {
-      console.warn("[YTM Block Background] No context found (either from tab message or storage fallback).");
+      Logger.warn("No context found (either from tab message or storage fallback).");
       chrome.tabs.sendMessage(tab.id, { action: "showToast", status: "failed", type: "artist" });
       return;
     }
@@ -176,7 +273,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 
     if (!type || !value) {
-      console.warn(`[YTM Block Background] Clicked ${info.menuItemId} but could not resolve value in context.`, JSON.stringify(ctx));
+      Logger.warn(`Clicked ${info.menuItemId} but could not resolve value in context.`, JSON.stringify(ctx));
       chrome.tabs.sendMessage(tab.id, { action: "showToast", status: "failed", type: type || 'artist' });
       return;
     }
@@ -192,22 +289,31 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       await handleBlockAction(tab.id, type, value);
     }
   } catch (err) {
-    console.error("[YTM Block Background] Error processing context menu click:", err);
+    Logger.error("Error processing context menu click:", err);
   }
-});
+}));
 
 // Listen for messages from content scripts
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(safeEventListener('runtime.onMessage', (request, sender, sendResponse) => {
+  if (!request) return false;
+
+  // Heartbeat logging to monitor runtime connection health
+  if (request.action === 'heartbeat') {
+    Logger.debug(`Heartbeat received from tab: ${sender.tab ? sender.tab.id : 'unknown'}`);
+    sendResponse({ status: 'alive', timestamp: Date.now() });
+    return true;
+  }
+
   if (request.action === 'rightClickContext') {
     const ctx = request.context;
-    console.log("[YTM Block Background] Received right-click context message:", JSON.stringify(ctx));
+    Logger.debug("Received right-click context message:", JSON.stringify(ctx));
     // Persist context to local storage to be safe during worker suspension
     chrome.storage.local.set({ lastRightClickedContext: ctx }, () => {
       updateNativeMenus(ctx);
     });
   }
   return true;
-});
+}));
 
 /**
  * Dynamically updates the titles and visibility of hierarchical context menu options
@@ -216,7 +322,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  */
 async function updateNativeMenus(ctx) {
   try {
-    console.log("[YTM Block Background] Updating context menus with context:", JSON.stringify(ctx));
+    Logger.debug("Updating context menus with context:", JSON.stringify(ctx));
     const blockData = await getBlockData();
     
     const hasArtist = !!(ctx && ctx.artist);
@@ -242,9 +348,9 @@ async function updateNativeMenus(ctx) {
     }, () => {
       const err = chrome.runtime.lastError;
       if (err) {
-        console.warn("[YTM Block Background] Error updating artist menu:", err.message);
+        Logger.warn("Error updating artist menu:", err.message);
         if (err.message.includes("Cannot find menu item") || err.message.includes("does not exist")) {
-          console.log("[YTM Block Background] Menu items missing. Re-initializing...");
+          Logger.info("Menu items missing during update. Re-initializing...");
           safeInitializeMenus();
         }
       }
@@ -260,7 +366,7 @@ async function updateNativeMenus(ctx) {
       visible: hasSong
     }, () => {
       const err = chrome.runtime.lastError;
-      if (err) console.warn("[YTM Block Background] Error updating song menu:", err.message);
+      if (err) Logger.warn("Error updating song menu:", err.message);
     });
 
     // Update Album Menu Item
@@ -273,7 +379,7 @@ async function updateNativeMenus(ctx) {
       visible: hasAlbum
     }, () => {
       const err = chrome.runtime.lastError;
-      if (err) console.warn("[YTM Block Background] Error updating album menu:", err.message);
+      if (err) Logger.warn("Error updating album menu:", err.message);
     });
 
     const parentVisible = hasArtist || hasSong || hasAlbum;
@@ -281,10 +387,10 @@ async function updateNativeMenus(ctx) {
       visible: parentVisible
     }, () => {
       const err = chrome.runtime.lastError;
-      if (err) console.warn("[YTM Block Background] Error updating parent menu visibility:", err.message);
+      if (err) Logger.warn("Error updating parent menu visibility:", err.message);
     });
   } catch (error) {
-    console.error("[YTM Block Background] Error in updateNativeMenus:", error);
+    Logger.error("Error in updateNativeMenus:", error);
   }
 }
 
@@ -295,12 +401,12 @@ async function updateNativeMenus(ctx) {
  * @param {string} value - Raw item value.
  */
 async function handleBlockAction(tabId, type, value) {
-  console.log(`[YTM Block Background] Blocking ${type}: "${value}"`);
+  Logger.info(`Attempting to block ${type}: "${value}"`);
   try {
     const result = await addBlockedItem(type, value);
     if (!result.success) {
       if (result.status === 'already_blocked') {
-        console.log(`[YTM Block Background] ${type} "${value}" is already blocked.`);
+        Logger.info(`${type} "${value}" is already blocked.`);
         chrome.tabs.sendMessage(tabId, { 
           action: "showToast", 
           status: "already_blocked", 
@@ -313,7 +419,7 @@ async function handleBlockAction(tabId, type, value) {
       return;
     }
 
-    console.log(`[YTM Block Background] Successfully blocked ${type}: "${value}"`);
+    Logger.info(`Successfully blocked ${type}: "${value}"`);
     chrome.tabs.sendMessage(tabId, { 
       action: "showToast", 
       status: "blocked", 
@@ -321,7 +427,7 @@ async function handleBlockAction(tabId, type, value) {
       type: type
     });
   } catch (err) {
-    console.error(`[YTM Block Background] Failed to block ${type} "${value}":`, err);
+    Logger.error(`Failed to block ${type} "${value}":`, err);
     chrome.tabs.sendMessage(tabId, { action: "showToast", status: "failed", type: type });
   }
 }
@@ -333,16 +439,16 @@ async function handleBlockAction(tabId, type, value) {
  * @param {string} value - Raw item value.
  */
 async function handleUnblockAction(tabId, type, value) {
-  console.log(`[YTM Block Background] Unblocking ${type}: "${value}"`);
+  Logger.info(`Attempting to unblock ${type}: "${value}"`);
   try {
     const result = await removeBlockedItem(type, value);
     if (!result.success) {
-      console.warn(`[YTM Block Background] ${type} "${value}" is not blocked.`);
+      Logger.warn(`${type} "${value}" is not blocked.`);
       chrome.tabs.sendMessage(tabId, { action: "showToast", status: "failed", type: type });
       return;
     }
 
-    console.log(`[YTM Block Background] Successfully unblocked ${type}: "${value}"`);
+    Logger.info(`Successfully unblocked ${type}: "${value}"`);
     chrome.tabs.sendMessage(tabId, { 
       action: "showToast", 
       status: "unblocked", 
@@ -350,7 +456,7 @@ async function handleUnblockAction(tabId, type, value) {
       type: type
     });
   } catch (err) {
-    console.error(`[YTM Block Background] Failed to unblock ${type} "${value}":`, err);
+    Logger.error(`Failed to unblock ${type} "${value}":`, err);
     chrome.tabs.sendMessage(tabId, { action: "showToast", status: "failed", type: type });
   }
 }
