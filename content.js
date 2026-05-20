@@ -58,7 +58,8 @@ class YTMBlockController {
     this.observerLifecycle = {
       track: false,
       queue: false,
-      rec: false
+      rec: false,
+      menu: false
     };
 
     this.log('info', 'Extension active. Resilient async hardening engine loaded.');
@@ -120,6 +121,9 @@ class YTMBlockController {
 
       // 7. Bind capture-phase contextmenu listeners for right-click artist extraction
       this.setupRightClickListener();
+
+      // 7b. Set up MutationObserver targeting document.body for custom popup menus
+      this.setupPopupMenuObserver();
 
       // 8. Bind capture-phase left-click listeners for three-dot menu button caching
       this.setupLeftClickListener();
@@ -375,6 +379,10 @@ class YTMBlockController {
         clearTimeout(this.recDebounceTimeout);
         this.recDebounceTimeout = null;
       }
+      if (this.menuObserver) {
+        this.menuObserver.disconnect();
+        this.menuObserver = null;
+      }
       if (this.queueCheckInterval) {
         clearInterval(this.queueCheckInterval);
         this.queueCheckInterval = null;
@@ -382,6 +390,7 @@ class YTMBlockController {
       this.observerLifecycle.track = false;
       this.observerLifecycle.queue = false;
       this.observerLifecycle.rec = false;
+      this.observerLifecycle.menu = false;
       this.initialized = false;
     } catch (e) {
       // Catch silently during invalidation tear-down
@@ -636,35 +645,8 @@ class YTMBlockController {
     }
 
     try {
-      this.observer = new MutationObserver((mutations) => {
+      this.observer = new MutationObserver(() => {
         if (!this.initialized) return;
-
-        try {
-          let hasPopupChange = false;
-          for (let i = 0; i < mutations.length; i++) {
-            const mutation = mutations[i];
-            if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-              for (let j = 0; j < mutation.addedNodes.length; j++) {
-                const node = mutation.addedNodes[j];
-                if (node && node.nodeType === 1) { // Node.ELEMENT_NODE
-                  const tagName = node.tagName ? node.tagName.toLowerCase() : '';
-                  if (tagName === 'ytmusic-menu-popup-renderer' ||
-                      (node.querySelector && node.querySelector('ytmusic-menu-popup-renderer'))) {
-                    hasPopupChange = true;
-                    break;
-                  }
-                }
-              }
-            }
-            if (hasPopupChange) break;
-          }
-
-          if (hasPopupChange && this.isContextValid()) {
-            this.injectCustomMenuItem();
-          }
-        } catch (err) {
-          this.log('error', 'Error processing menu mutations:', err);
-        }
 
         if (this.debounceTimeout) {
           clearTimeout(this.debounceTimeout);
@@ -688,6 +670,60 @@ class YTMBlockController {
       this.log('debug', 'Track observer successfully registered.');
     } catch (error) {
       this.log('error', 'Failed to register track observer:', error);
+    }
+  }
+
+  /**
+   * Dedicated MutationObserver targeting document.body to detect custom popup overlay menus
+   * and inject Block/Unblock custom options.
+   */
+  setupPopupMenuObserver() {
+    if (!this.isContextValid()) return;
+
+    if (this.observerLifecycle.menu) {
+      this.log('debug', 'Popup menu observer already active. Skipping setup.');
+      return;
+    }
+
+    try {
+      this.menuObserver = new MutationObserver((mutations) => {
+        if (!this.initialized) return;
+
+        let hasPopupChange = false;
+        for (let i = 0; i < mutations.length; i++) {
+          const mutation = mutations[i];
+          if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+            for (let j = 0; j < mutation.addedNodes.length; j++) {
+              const node = mutation.addedNodes[j];
+              if (node && node.nodeType === 1) { // Node.ELEMENT_NODE
+                const tagName = node.tagName ? node.tagName.toLowerCase() : '';
+                if (tagName === 'ytmusic-menu-popup-renderer' ||
+                    tagName === 'tp-yt-paper-listbox' ||
+                    (node.querySelector && node.querySelector('ytmusic-menu-popup-renderer, tp-yt-paper-listbox'))) {
+                  hasPopupChange = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (hasPopupChange) break;
+        }
+
+        if (hasPopupChange && this.isContextValid()) {
+          this.log('debug', 'Detected custom popup menu renderer. Injecting options...');
+          this.injectCustomMenuItem();
+        }
+      });
+
+      this.menuObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+
+      this.observerLifecycle.menu = true;
+      this.log('debug', 'Popup menu observer successfully registered on document.body.');
+    } catch (error) {
+      this.log('error', 'Failed to register popup menu observer:', error);
     }
   }
 
@@ -1017,13 +1053,23 @@ class YTMBlockController {
   }
 
   /**
-   * Instantly injects custom crimson "Block" options into 
+   * Instantly injects custom crimson "Block/Unblock" options into 
    * YouTube Music's custom DOM context menu overlay.
+   * Retries dynamically if the popup list elements are not yet fully populated in the DOM.
    */
-  injectCustomMenuItem() {
+  injectCustomMenuItem(attempts = 0) {
     const menuList = document.querySelector('ytmusic-menu-popup-renderer #items') || 
-                     document.querySelector('#items.ytmusic-menu-popup-renderer');
-    if (!menuList) return;
+                     document.querySelector('#items.ytmusic-menu-popup-renderer') ||
+                     document.querySelector('tp-yt-paper-listbox#items');
+    
+    if (!menuList) {
+      if (attempts < 15) {
+        setTimeout(() => this.injectCustomMenuItem(attempts + 1), 30);
+      } else {
+        this.log('warn', 'Could not locate menu list container (#items) after 15 attempts.');
+      }
+      return;
+    }
 
     // Check if already injected to avoid duplicate items
     if (menuList.querySelector('[data-ytm-block-injected="true"]')) return;
@@ -1034,23 +1080,29 @@ class YTMBlockController {
     
     if (context) {
       if (context.artist) {
+        const isBlocked = this.blockedArtists.includes(context.artist.trim().toLowerCase());
         itemsToInject.push({
           type: 'artist',
-          label: `Block Artist (${context.artist})`,
+          action: isBlocked ? 'unblock' : 'block',
+          label: isBlocked ? `Unblock Artist (${context.artist})` : `Block Artist (${context.artist})`,
           value: context.artist
         });
       }
       if (context.song) {
+        const isBlocked = this.blockedSongs.includes(context.song.trim().toLowerCase());
         itemsToInject.push({
           type: 'song',
-          label: `Block Song (${context.song})`,
+          action: isBlocked ? 'unblock' : 'block',
+          label: isBlocked ? `Unblock Song (${context.song})` : `Block Song (${context.song})`,
           value: context.song
         });
       }
       if (context.album) {
+        const isBlocked = this.blockedAlbums.includes(context.album.trim().toLowerCase());
         itemsToInject.push({
           type: 'album',
-          label: `Block Album (${context.album})`,
+          action: isBlocked ? 'unblock' : 'block',
+          label: isBlocked ? `Unblock Album (${context.album})` : `Block Album (${context.album})`,
           value: context.album
         });
       }
@@ -1060,25 +1112,31 @@ class YTMBlockController {
     if (itemsToInject.length === 0) {
       const activeArtist = this.getCurrentArtist().artist;
       if (activeArtist) {
+        const isBlocked = this.blockedArtists.includes(activeArtist.trim().toLowerCase());
         itemsToInject.push({
           type: 'artist',
-          label: `Block Artist (${activeArtist})`,
+          action: isBlocked ? 'unblock' : 'block',
+          label: isBlocked ? `Unblock Artist (${activeArtist})` : `Block Artist (${activeArtist})`,
           value: activeArtist
         });
       }
       const activeSong = this.getCurrentSongTitle();
       if (activeSong) {
+        const isBlocked = this.blockedSongs.includes(activeSong.trim().toLowerCase());
         itemsToInject.push({
           type: 'song',
-          label: `Block Song (${activeSong})`,
+          action: isBlocked ? 'unblock' : 'block',
+          label: isBlocked ? `Unblock Song (${activeSong})` : `Block Song (${activeSong})`,
           value: activeSong
         });
       }
       const activeAlbum = this.getCurrentAlbum();
       if (activeAlbum) {
+        const isBlocked = this.blockedAlbums.includes(activeAlbum.trim().toLowerCase());
         itemsToInject.push({
           type: 'album',
-          label: `Block Album (${activeAlbum})`,
+          action: isBlocked ? 'unblock' : 'block',
+          label: isBlocked ? `Unblock Album (${activeAlbum})` : `Block Album (${activeAlbum})`,
           value: activeAlbum
         });
       }
@@ -1091,14 +1149,18 @@ class YTMBlockController {
       newItem.setAttribute('data-ytm-block-injected', 'true');
       newItem.setAttribute('role', 'menuitem');
 
+      // Use a custom icon (crossed out circle for block, checkmark or minus for unblock)
+      const strokeColor = item.action === 'unblock' ? '#10B981' : '#FF1E46';
       newItem.innerHTML = `
         <span class="ytm-custom-menu-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FF1E46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9"></circle>
-            <line x1="5.64" y1="5.64" x2="18.36" y2="18.36"></line>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            ${item.action === 'unblock' 
+              ? `<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>`
+              : `<circle cx="12" cy="12" r="9"></circle><line x1="5.64" y1="5.64" x2="18.36" y2="18.36"></line>`
+            }
           </svg>
         </span>
-        <span class="ytm-custom-menu-text">${item.label}</span>
+        <span class="ytm-custom-menu-text" style="color: ${strokeColor};">${item.label}</span>
       `;
 
       let actionTriggered = false;
@@ -1110,9 +1172,13 @@ class YTMBlockController {
         actionTriggered = true;
         setTimeout(() => { actionTriggered = false; }, 500);
 
-        console.log(`%c[YTM Block] Custom menu item clicked for type "${item.type}": "${item.value}"`, 'color: #FF1E46; font-weight: bold;');
+        this.log('info', `Custom menu item clicked for type "${item.type}" (${item.action}): "${item.value}"`);
 
-        this.addBlockedItemFromInline(item.type, item.value);
+        if (item.action === 'unblock') {
+          this.removeBlockedItemFromInline(item.type, item.value);
+        } else {
+          this.addBlockedItemFromInline(item.type, item.value);
+        }
 
         // Close YouTube Music's overlay menu naturally
         const dismisser = document.querySelector('iron-overlay-backdrop');
@@ -1130,7 +1196,7 @@ class YTMBlockController {
     });
 
     if (itemsToInject.length > 0) {
-      console.log(`[YTM Block] Successfully injected ${itemsToInject.length} custom block options into YTM dropdown.`);
+      this.log('debug', `Successfully injected ${itemsToInject.length} custom block options into YTM dropdown.`);
     }
   }
 
@@ -1140,9 +1206,9 @@ class YTMBlockController {
    * @param {string} name - Raw item name.
    */
   addBlockedItemFromInline(type, name) {
-    console.log(`%c[YTM Block]%c Direct blocking storage query started for: "${name}" (${type})`, 'color: #10B981; font-weight: bold;', 'color: default;');
+    this.log('debug', `Direct blocking storage query started for: "${name}" (${type})`);
     if (!this.isContextValid()) {
-      console.error('[YTM Block] Storage write halted: Context is invalid (please refresh the page).');
+      this.log('error', 'Storage write halted: Context is invalid (please refresh the page).');
       return;
     }
 
@@ -1152,7 +1218,6 @@ class YTMBlockController {
 
         if (!result.success) {
           if (result.status === 'already_blocked') {
-            console.log(`%c[YTM Block]%c ${type} "${name}" is already blocked. Spawning warning toast.`, 'color: #EAB308; font-weight: bold;', 'color: default;');
             this.showToastNotification(name, 'already_blocked', type);
           } else {
             this.showToastNotification(name, 'failed', type);
@@ -1160,11 +1225,41 @@ class YTMBlockController {
           return;
         }
 
-        console.log(`%c[YTM Block]%c Direct block success! Persistent storage updated for: "${name}" (${type})`, 'color: #10B981; font-weight: bold;', 'color: default;');
+        this.log('info', `Direct block success! Persistent storage updated for: "${name}" (${type})`);
         this.showToastNotification(name, 'blocked', type);
       });
     } catch (error) {
-      console.error('[YTM Block] Direct blocking failed with exception:', error);
+      this.log('error', 'Direct blocking failed with exception:', error);
+      this.disconnectAllObservers();
+    }
+  }
+
+  /**
+   * Removes an item from persistent blocklist directly from inline actions.
+   * @param {('artist'|'song'|'album')} type - Block type.
+   * @param {string} name - Raw item name.
+   */
+  removeBlockedItemFromInline(type, name) {
+    this.log('debug', `Direct unblocking storage query started for: "${name}" (${type})`);
+    if (!this.isContextValid()) {
+      this.log('error', 'Storage write halted: Context is invalid (please refresh the page).');
+      return;
+    }
+
+    try {
+      removeBlockedItem(type, name).then((result) => {
+        if (!this.isContextValid()) return;
+
+        if (!result.success) {
+          this.showToastNotification(name, 'failed', type);
+          return;
+        }
+
+        this.log('info', `Direct unblock success! Persistent storage updated for: "${name}" (${type})`);
+        this.showToastNotification(name, 'unblocked', type);
+      });
+    } catch (error) {
+      this.log('error', 'Direct unblocking failed with exception:', error);
       this.disconnectAllObservers();
     }
   }
