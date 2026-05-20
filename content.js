@@ -502,6 +502,16 @@ class YTMBlockController {
         </span>
         <span>Blocked ${type}: <span class="ytm-toast-artist">${displayName}</span></span>
       `;
+    } else if (status === 'unblocked') {
+      toast.style.borderColor = 'rgba(16, 185, 129, 0.25)';
+      toast.innerHTML = `
+        <span class="ytm-toast-icon" style="color: #10B981;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </span>
+        <span>Unblocked ${type}: <span class="ytm-toast-artist">${displayName}</span></span>
+      `;
     } else if (status === 'already_blocked') {
       toast.style.borderColor = 'rgba(239, 68, 68, 0.25)';
       toast.innerHTML = `
