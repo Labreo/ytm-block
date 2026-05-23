@@ -18,7 +18,7 @@ An elegant, secure, and lightweight browser extension for **YouTube Music** (`mu
 <a href="https://microsoftedge.microsoft.com/addons/detail/ytm-block/YOUR-ADDON-ID"><img src="https://user-images.githubusercontent.com/585534/107280673-a5ece780-6a26-11eb-9cc7-9fa9f9f81180.png" alt="Get YTM Block for Microsoft Edge" height="40"></a>
 
 <!-- INSERT CHROME WEB STORE LINK HERE -->
-<a href="https://chromewebstore.google.com/detail/ytm-block/YOUR-ADDON-ID"><img src="https://user-images.githubusercontent.com/585534/107280622-91a8ea80-6a26-11eb-8d07-77c548b28665.png" alt="Get YTM Block for Chrome" height="40"></a>
+<a href="https://chromewebstore.google.com/detail/ytm-block/dilimapmcgipgkbimhmblipdkhjjlool?authuser=2&hl=en"><img src="https://user-images.githubusercontent.com/585534/107280622-91a8ea80-6a26-11eb-8d07-77c548b28665.png" alt="Get YTM Block for Chrome" height="40"></a>
 
 
 ## 📖 Project Purpose
