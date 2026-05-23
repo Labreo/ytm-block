@@ -6,8 +6,7 @@
   "permissions": [
     "storage",
     "activeTab",
-    "contextMenus",
-    "scripting"
+    "contextMenus"
   ],
   "host_permissions": [
     "https://music.youtube.com/*"
