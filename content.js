@@ -2286,7 +2286,7 @@ class YTMBlockController {
   }
 
   /**
-   * Evaluates if the given artist name matches any blocked artist rules (partial matching allowed).
+   * Evaluates if the given artist name matches any blocked artist rules (exact and delimiter-aware).
    * @param {string} artistName - The raw artist name.
    * @returns {string|null} The matched block rule value, or null.
    */
@@ -2294,9 +2294,15 @@ class YTMBlockController {
     if (!artistName || this.blockedArtists.length === 0) return null;
     const artistLower = artistName.toLowerCase().trim();
     
+    // Split the artist string by common collaboration delimiters
+    const delimiters = /[,&]|\b(?:feat|ft)\b\.?/i;
+    const individualArtists = artistLower.split(delimiters).map(a => a.trim()).filter(Boolean);
+
     for (const blocked of this.blockedArtists) {
       const blockedLower = blocked.toLowerCase().trim();
-      if (artistLower === blockedLower || artistLower.includes(blockedLower)) {
+
+      // Check for exact match of the entire string OR exact match of any individual collaborative artist
+      if (artistLower === blockedLower || individualArtists.includes(blockedLower)) {
         return blocked;
       }
     }
