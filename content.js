@@ -2209,8 +2209,10 @@ class YTMBlockController {
    * Sanitizes and normalizes artist name values.
    */
   normalizeArtist(name) {
-    if (!name) return '';
-    return name.trim().toLowerCase();
+    if (!name || typeof name !== 'string') return '';
+    return name.trim().toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[^\w\s-]/gi, '');
   }
 
   // --- CORE PLAYER EXTRACTION METHODS ---
@@ -2795,5 +2797,11 @@ class YTMBlockController {
 }
 
 // Instantiate and initialize the controller
-const ytmBlockController = new YTMBlockController();
-ytmBlockController.init();
+if (typeof window !== 'undefined') {
+  const ytmBlockController = new YTMBlockController();
+  ytmBlockController.init();
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { YTMBlockController };
+}

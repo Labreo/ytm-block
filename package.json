@@ -1,0 +1,10 @@
+{
+  "name": "ytm-block",
+  "version": "1.2.0",
+  "description": "YouTube Music track, artist, and album blocking extension",
+  "scripts": {
+    "test": "node --test"
+  },
+  "private": true,
+  "license": "MIT"
+}
