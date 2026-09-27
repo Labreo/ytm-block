@@ -1716,7 +1716,7 @@ class YTMBlockController {
                    el.closest('ytmusic-detail-header-renderer');
     if (header) {
       const titleEl = header.querySelector('.title') || header.querySelector('h2') || header.querySelector('h1');
-      if (window.location.href.includes('/channel/') || window.location.href.includes('/browse/UC')) {
+      if (window.location.pathname.startsWith('/@') || window.location.href.includes('/channel/') || window.location.href.includes('/browse/UC')) {
         if (titleEl && titleEl.textContent.trim()) {
           return {
             value: titleEl.textContent.trim(),
@@ -1749,6 +1749,23 @@ class YTMBlockController {
             value: text,
             confidence: 0.7,
             source: 'Generic Container Artist Link extraction'
+          };
+        }
+      }
+    }
+
+    // 8. Artist Page Global Fallback
+    // If we are on an artist page and no specific artist context was found from the element,
+    // default to the artist of the page to prevent unrelated player bar track from being blocked.
+    if (window.location.pathname.startsWith('/@') || window.location.href.includes('/channel/') || window.location.href.includes('/browse/UC')) {
+      const pageHeader = document.querySelector('ytmusic-imig-header-renderer, ytmusic-header-renderer');
+      if (pageHeader) {
+        const titleEl = pageHeader.querySelector('.title') || pageHeader.querySelector('h2') || pageHeader.querySelector('h1');
+        if (titleEl && titleEl.textContent.trim()) {
+          return {
+            value: titleEl.textContent.trim(),
+            confidence: 0.7,
+            source: 'Artist Page Global Header Fallback'
           };
         }
       }
@@ -2080,6 +2097,10 @@ class YTMBlockController {
         entityType = 'artist';
         confidence = 0.9;
         selectorSource = 'Artist/General Header context';
+      } else if (window.location.pathname.startsWith('/@') || window.location.href.includes('/channel/') || window.location.href.includes('/browse/UC')) {
+        entityType = 'artist';
+        confidence = 0.7;
+        selectorSource = 'Artist Page Global Fallback context';
       } else if (el.closest('ytmusic-two-row-item-renderer') || el.closest('ytmusic-grid-single-column-item-renderer')) {
         const card = el.closest('ytmusic-two-row-item-renderer') || el.closest('ytmusic-grid-single-column-item-renderer');
         const titleLink = card.querySelector('a.title') || card.querySelector('#title a');
