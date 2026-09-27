@@ -435,7 +435,7 @@ function renderCategoryList(type, list, container, badge, emptyStateEl) {
   badge.textContent = filtered.length;
 
   if (filtered.length === 0) {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.classList.add('hidden');
     emptyStateEl.classList.remove('hidden');
     // If filter is active, update empty state label to indicate no matches
@@ -445,7 +445,7 @@ function renderCategoryList(type, list, container, badge, emptyStateEl) {
     container.classList.remove('hidden');
     
     // Clear list container
-    container.innerHTML = '';
+    container.replaceChildren();
     
     filtered.forEach((item) => {
       container.appendChild(createTagComponent(type, item));
@@ -470,12 +470,33 @@ function createTagComponent(type, value) {
   const removeBtn = document.createElement('button');
   removeBtn.className = 'tag-remove-btn';
   removeBtn.title = `Remove "${displayName}"`;
-  removeBtn.innerHTML = `
-    <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18"></line>
-      <line x1="6" y1="6" x2="18" y2="18"></line>
-    </svg>
-  `;
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", "10");
+  svg.setAttribute("height", "10");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "3");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+
+  const line1 = document.createElementNS(svgNS, "line");
+  line1.setAttribute("x1", "18");
+  line1.setAttribute("y1", "6");
+  line1.setAttribute("x2", "6");
+  line1.setAttribute("y2", "18");
+
+  const line2 = document.createElementNS(svgNS, "line");
+  line2.setAttribute("x1", "6");
+  line2.setAttribute("y1", "6");
+  line2.setAttribute("x2", "18");
+  line2.setAttribute("y2", "18");
+
+  svg.appendChild(line1);
+  svg.appendChild(line2);
+  removeBtn.appendChild(svg);
 
   removeBtn.addEventListener('click', () => {
     pill.style.transform = 'scale(0.9)';
