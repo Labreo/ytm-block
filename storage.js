@@ -15,12 +15,17 @@ const STORAGE_KEYS = {
 
 /**
  * Normalizes input entries to ensure consistent comparison (lowercase & trimmed).
+ * Also strips zero-width characters and collapses multiple consecutive whitespace.
  * @param {string} val - Raw string input.
  * @returns {string} Normalized string.
  */
 function normalizeEntry(val) {
   if (typeof val !== 'string') return '';
-  return val.trim().toLowerCase();
+  return val
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -185,4 +190,14 @@ function removeBlockedItem(type, value) {
       });
     });
   });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    STORAGE_KEYS,
+    normalizeEntry,
+    getBlockData,
+    addBlockedItem,
+    removeBlockedItem
+  };
 }
