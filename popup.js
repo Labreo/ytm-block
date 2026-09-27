@@ -10,6 +10,9 @@ const blockInput = document.getElementById('blockInput');
 const blockTypeSelect = document.getElementById('blockTypeSelect');
 const addBtn = document.getElementById('addBtn');
 const feedbackMsg = document.getElementById('feedbackMsg');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
+const importFileInput = document.getElementById('importFileInput');
 
 // Lists, Badges, and Empty States
 const songList = document.getElementById('songList');
@@ -74,6 +77,11 @@ document.addEventListener('DOMContentLoaded', () => {
   blockCurrentSongBtn.addEventListener('click', () => handleBlockCurrent('song', state.currentPlayingTitle));
   blockCurrentAlbumBtn.addEventListener('click', () => handleBlockCurrent('album', state.currentPlayingAlbum));
   blockCurrentArtistBtn.addEventListener('click', () => handleBlockCurrent('artist', state.currentPlayingArtist));
+
+  // Import/Export actions
+  exportBtn.addEventListener('click', handleExportData);
+  importBtn.addEventListener('click', () => importFileInput.click());
+  importFileInput.addEventListener('change', handleImportData);
 
   window.addEventListener('unload', () => {
     clearInterval(pollInterval);
@@ -233,6 +241,102 @@ function setBtnBlockedState(btn, isBlocked, text) {
 }
 
 // --- ACTIONS & ADDITIONS ---
+
+/**
+ * Handles exporting blocklist data to a JSON file.
+ */
+function handleExportData() {
+  getBlockData().then((data) => {
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+
+    a.href = url;
+    a.download = `ytm-blocklist-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showFeedback('Blocklists exported successfully!');
+  }).catch((err) => {
+    console.error('Export failed:', err);
+    showFeedback('Export failed.');
+  });
+}
+
+/**
+ * Handles importing blocklist data from a JSON file.
+ */
+function handleImportData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const importedData = JSON.parse(e.target.result);
+
+      // Basic schema validation
+      if (!importedData || typeof importedData !== 'object') {
+        throw new Error('Invalid JSON format');
+      }
+
+      getBlockData().then((currentData) => {
+        // Merge without duplicates using Sets
+        const mergeLists = (current, imported) => {
+          const list = Array.isArray(imported) ? imported : [];
+          const currentSet = new Set(current);
+          list.forEach(item => {
+            if (typeof item === 'string') {
+              // Normalize based on storage.js logic
+              const norm = item.trim().toLowerCase();
+              if (norm) currentSet.add(norm);
+            }
+          });
+          return Array.from(currentSet).sort();
+        };
+
+        const mergedData = {
+          blockedArtists: mergeLists(currentData.blockedArtists || [], importedData.blockedArtists),
+          blockedSongs: mergeLists(currentData.blockedSongs || [], importedData.blockedSongs),
+          blockedAlbums: mergeLists(currentData.blockedAlbums || [], importedData.blockedAlbums)
+        };
+
+        chrome.storage.sync.set(mergedData, () => {
+          if (chrome.runtime.lastError) {
+            console.error('Import storage error:', chrome.runtime.lastError);
+            showFeedback('Import failed (storage error).');
+            return;
+          }
+
+          // Update local state and re-render
+          state.blockedArtists = mergedData.blockedArtists;
+          state.blockedSongs = mergedData.blockedSongs;
+          state.blockedAlbums = mergedData.blockedAlbums;
+
+          renderAll();
+          showFeedback('Blocklists imported successfully!');
+        });
+      });
+    } catch (err) {
+      console.error('Import parse error:', err);
+      showFeedback('Invalid import file format.');
+    } finally {
+      // Reset input so the same file can be selected again
+      importFileInput.value = '';
+    }
+  };
+
+  reader.onerror = function() {
+    showFeedback('Error reading file.');
+    importFileInput.value = '';
+  };
+
+  reader.readAsText(file);
+}
 
 /**
  * Handles manual entries from the input bar matching select type.
