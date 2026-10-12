@@ -59,14 +59,15 @@ function getBlockData() {
         const cleanList = (list) => {
           const seen = new Set();
           const cleaned = [];
-          list.forEach(item => {
-            const norm = normalizeEntry(item);
+          const len = list.length;
+          for (let i = 0; i < len; i++) {
+            const norm = normalizeEntry(list[i]);
             if (norm && !seen.has(norm)) {
               seen.add(norm);
               cleaned.push(norm);
             }
-          });
-          if (cleaned.length !== list.length) {
+          }
+          if (cleaned.length !== len) {
             migrated = true;
           }
           return cleaned;
