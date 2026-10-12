@@ -30,6 +30,9 @@ class YTMBlockController {
       artist: ''
     };
 
+    // Cached media element reference to avoid repeated global DOM querying
+    this.cachedMediaElement = null;
+
     // Cooldown and Rate Limiting
     this.lastClickTime = 0;          // Timestamp of the last next-button click
     this.cooldownDuration = 1000;    // Cooldown rate limit window in milliseconds (1 second)
@@ -2482,11 +2485,22 @@ class YTMBlockController {
       }
     }
 
+    if (this.cachedMediaElement && this.cachedMediaElement.isConnected) {
+      if (!this.cachedMediaElement.paused && !this.cachedMediaElement.ended && this.cachedMediaElement.currentTime > 0) {
+        return true;
+      }
+    }
+
     const mediaElements = document.querySelectorAll('audio, video');
     for (const media of mediaElements) {
       if (!media.paused && !media.ended && media.currentTime > 0) {
+        this.cachedMediaElement = media;
         return true;
       }
+    }
+
+    if (mediaElements.length > 0) {
+      this.cachedMediaElement = mediaElements[0];
     }
 
     return false;
