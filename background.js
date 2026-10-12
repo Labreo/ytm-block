@@ -15,7 +15,7 @@ const DEBUG = true; // Toggle for verbose debugging logs
 
 const Logger = {
   info: (msg, ...args) => {
-    console.log(`%c[YTM Block Info]%c ${msg}`, 'color: #38BDF8; font-weight: bold;', 'color: default;', ...args);
+    console.info(`%c[YTM Block Info]%c ${msg}`, 'color: #38BDF8; font-weight: bold;', 'color: default;', ...args);
   },
   debug: (msg, ...args) => {
     if (DEBUG) {
