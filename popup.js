@@ -5,38 +5,40 @@
  * manual block additions, one-click currently playing blockers, and background polling.
  */
 
+const getEl = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
+
 // DOM Elements
-const blockInput = document.getElementById('blockInput');
-const blockTypeSelect = document.getElementById('blockTypeSelect');
-const addBtn = document.getElementById('addBtn');
-const feedbackMsg = document.getElementById('feedbackMsg');
-const exportBtn = document.getElementById('exportBtn');
-const importBtn = document.getElementById('importBtn');
-const importFileInput = document.getElementById('importFileInput');
+const blockInput = getEl('blockInput');
+const blockTypeSelect = getEl('blockTypeSelect');
+const addBtn = getEl('addBtn');
+const feedbackMsg = getEl('feedbackMsg');
+const exportBtn = getEl('exportBtn');
+const importBtn = getEl('importBtn');
+const importFileInput = getEl('importFileInput');
 
 // Lists, Badges, and Empty States
-const songList = document.getElementById('songList');
-const albumList = document.getElementById('albumList');
-const artistList = document.getElementById('artistList');
+const songList = getEl('songList');
+const albumList = getEl('albumList');
+const artistList = getEl('artistList');
 
-const songCountBadge = document.getElementById('songCountBadge');
-const albumCountBadge = document.getElementById('albumCountBadge');
-const artistCountBadge = document.getElementById('artistCountBadge');
+const songCountBadge = getEl('songCountBadge');
+const albumCountBadge = getEl('albumCountBadge');
+const artistCountBadge = getEl('artistCountBadge');
 
-const songEmptyState = document.getElementById('songEmptyState');
-const albumEmptyState = document.getElementById('albumEmptyState');
-const artistEmptyState = document.getElementById('artistEmptyState');
+const songEmptyState = getEl('songEmptyState');
+const albumEmptyState = getEl('albumEmptyState');
+const artistEmptyState = getEl('artistEmptyState');
 
 // Now Playing elements
-const nowPlayingPanel = document.getElementById('nowPlayingPanel');
-const playingStatusText = document.getElementById('playingStatusText');
-const currentTitleText = document.getElementById('currentTitleText');
-const currentArtistText = document.getElementById('currentArtistText');
-const currentAlbumText = document.getElementById('currentAlbumText');
+const nowPlayingPanel = getEl('nowPlayingPanel');
+const playingStatusText = getEl('playingStatusText');
+const currentTitleText = getEl('currentTitleText');
+const currentArtistText = getEl('currentArtistText');
+const currentAlbumText = getEl('currentAlbumText');
 
-const blockCurrentSongBtn = document.getElementById('blockCurrentSongBtn');
-const blockCurrentAlbumBtn = document.getElementById('blockCurrentAlbumBtn');
-const blockCurrentArtistBtn = document.getElementById('blockCurrentArtistBtn');
+const blockCurrentSongBtn = getEl('blockCurrentSongBtn');
+const blockCurrentAlbumBtn = getEl('blockCurrentAlbumBtn');
+const blockCurrentArtistBtn = getEl('blockCurrentArtistBtn');
 
 // State Manager
 let state = {
@@ -51,7 +53,8 @@ let state = {
 
 // --- INITIALIZATION ---
 
-document.addEventListener('DOMContentLoaded', () => {
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
   // Load blocklists from synced storage
   loadBlocklist();
 
@@ -88,7 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   blockInput.focus();
-});
+  });
+}
 
 // --- PERSISTENCE & STORAGE ---
 
@@ -267,6 +271,24 @@ function handleExportData() {
   });
 }
 
+
+/**
+ * Validates the schema of imported blocklist data.
+ */
+function validateImportSchema(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return false;
+  }
+
+  const keys = ['blockedArtists', 'blockedSongs', 'blockedAlbums'];
+  for (const key of keys) {
+    if (key in data && !Array.isArray(data[key])) {
+      return false;
+    }
+  }
+
+  return true;
+}
 /**
  * Handles importing blocklist data from a JSON file.
  */
@@ -279,8 +301,8 @@ function handleImportData(event) {
     try {
       const importedData = JSON.parse(e.target.result);
 
-      // Basic schema validation
-      if (!importedData || typeof importedData !== 'object') {
+      // Schema validation
+      if (!validateImportSchema(importedData)) {
         throw new Error('Invalid JSON format');
       }
 
@@ -532,4 +554,10 @@ function showFeedback(message) {
   feedbackTimeout = setTimeout(() => {
     feedbackMsg.classList.remove('show');
   }, 2200);
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    validateImportSchema
+  };
 }
