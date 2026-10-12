@@ -965,9 +965,10 @@ class YTMBlockController {
     let totalBlockedInVisibleQueue = 0;
 
     items.forEach((item) => {
-      const artist = this.getQueueItemArtist(item);
+      const anchors = item.querySelectorAll('a');
+      const artist = this.getQueueItemArtist(item, anchors);
       const title = this.getQueueItemTitle(item);
-      const album = this.getQueueItemAlbum(item);
+      const album = this.getQueueItemAlbum(item, anchors);
 
       // Virtualization Check: Has the content changed since we last processed this element?
       if (item.dataset.ytmProcessed === 'true' && 
@@ -1055,11 +1056,12 @@ class YTMBlockController {
   /**
    * Extracts the album name from a queue item element using structural links.
    * @param {HTMLElement} item - Single queue list item element.
+   * @param {NodeList|Array} [anchors] - Pre-queried anchor elements inside the item.
    * @returns {string} Trimmed album name.
    */
-  getQueueItemAlbum(item) {
-    const anchors = item.querySelectorAll('a');
-    for (const link of anchors) {
+  getQueueItemAlbum(item, anchors) {
+    const links = anchors || item.querySelectorAll('a');
+    for (const link of links) {
       const href = link.getAttribute('href') || '';
       const text = link.textContent.trim();
       
@@ -1088,12 +1090,13 @@ class YTMBlockController {
   /**
    * Extracts the artist name from a queue item element using structural links.
    * @param {HTMLElement} item - Single queue list item element.
+   * @param {NodeList|Array} [anchors] - Pre-queried anchor elements inside the item.
    * @returns {string} Trimmed artist name.
    */
-  getQueueItemArtist(item) {
+  getQueueItemArtist(item, anchors) {
     // Upgraded: Scan all links to locate browse links (excluding playlist/album links)
-    const anchors = item.querySelectorAll('a');
-    for (const link of anchors) {
+    const links = anchors || item.querySelectorAll('a');
+    for (const link of links) {
       const href = link.getAttribute('href') || '';
       const text = link.textContent.trim();
       
