@@ -647,7 +647,7 @@ class YTMBlockController {
       unblockBtn.className = 'ytm-toast-action-btn';
       unblockBtn.textContent = 'Unblock';
       unblockBtn.addEventListener('click', () => {
-        this.removeItemFromBlocklist(type, name);
+        this.removeBlockedItemFromInline(type, name);
         toast.remove();
       });
       toast.appendChild(unblockBtn);
@@ -717,19 +717,6 @@ class YTMBlockController {
         }, 350);
       }
     }, displayDuration);
-  }
-
-  removeItemFromBlocklist(type, name) {
-    if (!this.isContextValid()) return;
-
-    try {
-      removeBlockedItem(type, name).then(() => {
-        if (!this.isContextValid()) return;
-        console.log(`%c[YTM Block]%c Unblocked: "${name}" (${type}) via toast shortcut.`, 'color: #10B981; font-weight: bold;', 'color: default;');
-      });
-    } catch (error) {
-      this.disconnectAllObservers();
-    }
   }
 
   /**
