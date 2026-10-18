@@ -1191,21 +1191,17 @@ class YTMBlockController {
    */
   findMenuItemsContainer() {
     // 1. Try standard Light DOM queries
-    let container = document.querySelector('ytmusic-menu-popup-renderer #items') || 
-                    document.querySelector('#items.ytmusic-menu-popup-renderer') ||
-                    document.querySelector('tp-yt-paper-listbox#items');
+    let container = document.querySelector('ytmusic-menu-popup-renderer #items, #items.ytmusic-menu-popup-renderer, tp-yt-paper-listbox#items');
     if (container) return container;
 
     // 2. Try piercing the shadow DOM of ytmusic-menu-popup-renderer if it exists
     const popupRenderer = document.querySelector('ytmusic-menu-popup-renderer');
     if (popupRenderer) {
       if (popupRenderer.shadowRoot) {
-        container = popupRenderer.shadowRoot.querySelector('#items') || 
-                    popupRenderer.shadowRoot.querySelector('tp-yt-paper-listbox#items');
+        container = popupRenderer.shadowRoot.querySelector('#items, tp-yt-paper-listbox#items');
         if (container) return container;
       }
-      container = popupRenderer.querySelector('#items') || 
-                  popupRenderer.querySelector('tp-yt-paper-listbox#items');
+      container = popupRenderer.querySelector('#items, tp-yt-paper-listbox#items');
       if (container) return container;
     }
 
