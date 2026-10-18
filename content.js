@@ -1113,7 +1113,7 @@ class YTMBlockController {
     }
 
     // Fallback: Parse secondary split-by-bullet byline classes
-    const bylineEl = item.querySelector('.byline') || item.querySelector('[class*="byline"]');
+    const bylineEl = item.querySelector('.byline, [class*="byline"]');
     if (bylineEl && bylineEl.textContent) {
       const text = bylineEl.textContent.trim();
       if (text) {
