@@ -1081,9 +1081,7 @@ class YTMBlockController {
    * @returns {string} Trimmed song title.
    */
   getQueueItemTitle(item) {
-    const titleEl = item.querySelector('.song-title') || 
-                    item.querySelector('.title') || 
-                    item.querySelector('yt-formatted-string');
+    const titleEl = item.querySelector('.song-title, .title, yt-formatted-string');
     if (titleEl && titleEl.textContent) {
       return titleEl.textContent.trim();
     }
@@ -1829,9 +1827,7 @@ class YTMBlockController {
     // 3. Queue list items
     const queueItem = el.closest('ytmusic-player-queue-item');
     if (queueItem) {
-      const titleEl = queueItem.querySelector('.song-title') || 
-                      queueItem.querySelector('.title') || 
-                      queueItem.querySelector('yt-formatted-string');
+      const titleEl = queueItem.querySelector('.song-title, .title, yt-formatted-string');
       if (titleEl && titleEl.textContent) {
         return {
           value: titleEl.textContent.trim(),
