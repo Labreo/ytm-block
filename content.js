@@ -2215,6 +2215,14 @@ class YTMBlockController {
    * Sanitizes and normalizes artist name values.
    */
   normalizeArtist(name) {
+    const normalize = typeof normalizeEntry === 'function'
+      ? normalizeEntry
+      : (typeof require !== 'undefined' ? require('./storage.js').normalizeEntry : null);
+
+    if (normalize) {
+      return normalize(name).replace(/[^\w\s-]/gi, '');
+    }
+
     if (!name || typeof name !== 'string') return '';
     return name.trim().toLowerCase()
       .replace(/\s+/g, ' ')
