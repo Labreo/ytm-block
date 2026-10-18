@@ -11,7 +11,7 @@
 importScripts('storage.js');
 
 // Troubleshooting and logging configuration
-const DEBUG = true; // Toggle for verbose debugging logs
+const DEBUG = false; // Toggle for verbose debugging logs
 
 const Logger = {
   info: (msg, ...args) => {
