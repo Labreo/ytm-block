@@ -1017,9 +1017,7 @@ class YTMBlockController {
   updateQueueStats(blockedCount) {
     let statsEl = document.getElementById('ytm-queue-stats');
     if (!statsEl) {
-      const queueHeader = document.querySelector('ytmusic-player-queue #header') || 
-                          document.querySelector('ytmusic-player-queue .title') ||
-                          document.querySelector('ytmusic-player-queue');
+      const queueHeader = document.querySelector('ytmusic-player-queue #header, ytmusic-player-queue .title, ytmusic-player-queue');
       if (!queueHeader) return;
 
       statsEl = document.createElement('div');

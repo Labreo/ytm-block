@@ -152,3 +152,133 @@ test('YTMBlockController - performance benchmark', async (t) => {
     console.log(`[Benchmark] Speedup: ${speedup.toFixed(2)}%`);
   });
 });
+
+test('YTMBlockController - updateQueueStats functionality and benchmark', async (t) => {
+  const controller = new YTMBlockController();
+
+  await t.test('updates stats badge correctly when statsEl exists or needs creation', () => {
+    let appendedChild = null;
+    const headerMock = {
+      appendChild(el) { appendedChild = el; }
+    };
+
+    let documentStatsEl = null;
+    global.document = {
+      getElementById(id) {
+        if (id === 'ytm-queue-stats') return documentStatsEl;
+        return null;
+      },
+      querySelector(selector) {
+        if (selector === 'ytmusic-player-queue #header, ytmusic-player-queue .title, ytmusic-player-queue' ||
+            selector === 'ytmusic-player-queue #header' ||
+            selector === 'ytmusic-player-queue .title' ||
+            selector === 'ytmusic-player-queue') {
+          return headerMock;
+        }
+        return null;
+      },
+      createElement(tag) {
+        const el = {
+          id: '',
+          className: '',
+          textContent: '',
+          classList: {
+            add(cls) { el.className += ` ${cls}`; },
+            remove(cls) { el.className = el.className.replace(cls, '').trim(); }
+          }
+        };
+        return el;
+      }
+    };
+
+    controller.updateQueueStats(3);
+    assert.ok(appendedChild !== null);
+    assert.strictEqual(appendedChild.id, 'ytm-queue-stats');
+    assert.strictEqual(appendedChild.textContent, '3 blocked tracks hidden');
+
+    documentStatsEl = appendedChild;
+    controller.updateQueueStats(1);
+    assert.strictEqual(documentStatsEl.textContent, '1 blocked track hidden');
+  });
+
+  await t.test('benchmark updateQueueStats baseline vs optimized DOM queries when creating stats element', () => {
+    const iterations = 50000;
+
+    const mockHeader = {
+      appendChild() {}
+    };
+
+    global.document = {
+      getElementById() { return null; },
+      querySelector(selector) {
+        if (selector === 'ytmusic-player-queue #header') return null;
+        if (selector === 'ytmusic-player-queue .title') return null;
+        if (selector === 'ytmusic-player-queue' || selector === 'ytmusic-player-queue #header, ytmusic-player-queue .title, ytmusic-player-queue') {
+          return mockHeader;
+        }
+        return null;
+      },
+      createElement() {
+        return {
+          id: '',
+          className: '',
+          textContent: '',
+          classList: { add() {}, remove() {} }
+        };
+      }
+    };
+
+    // Unoptimized implementation function
+    function updateQueueStatsBaseline(blockedCount) {
+      let statsEl = document.getElementById('ytm-queue-stats');
+      if (!statsEl) {
+        const queueHeader = document.querySelector('ytmusic-player-queue #header') ||
+                            document.querySelector('ytmusic-player-queue .title') ||
+                            document.querySelector('ytmusic-player-queue');
+        if (!queueHeader) return;
+
+        statsEl = document.createElement('div');
+        statsEl.id = 'ytm-queue-stats';
+        statsEl.className = 'ytm-queue-stats-badge';
+        queueHeader.appendChild(statsEl);
+      }
+    }
+
+    // Optimized implementation function
+    function updateQueueStatsOptimized(blockedCount) {
+      let statsEl = document.getElementById('ytm-queue-stats');
+      if (!statsEl) {
+        const queueHeader = document.querySelector('ytmusic-player-queue #header, ytmusic-player-queue .title, ytmusic-player-queue');
+        if (!queueHeader) return;
+
+        statsEl = document.createElement('div');
+        statsEl.id = 'ytm-queue-stats';
+        statsEl.className = 'ytm-queue-stats-badge';
+        queueHeader.appendChild(statsEl);
+      }
+    }
+
+    // Warmup
+    for (let i = 0; i < 1000; i++) {
+      updateQueueStatsBaseline(1);
+      updateQueueStatsOptimized(1);
+    }
+
+    const startBaseline = performance.now();
+    for (let i = 0; i < iterations; i++) {
+      updateQueueStatsBaseline(1);
+    }
+    const durationBaseline = performance.now() - startBaseline;
+
+    const startOptimized = performance.now();
+    for (let i = 0; i < iterations; i++) {
+      updateQueueStatsOptimized(1);
+    }
+    const durationOptimized = performance.now() - startOptimized;
+
+    const speedup = ((durationBaseline - durationOptimized) / durationBaseline) * 100;
+    console.log(`[Benchmark updateQueueStats] Baseline: ${durationBaseline.toFixed(2)}ms`);
+    console.log(`[Benchmark updateQueueStats] Optimized: ${durationOptimized.toFixed(2)}ms`);
+    console.log(`[Benchmark updateQueueStats] Speedup: ${speedup.toFixed(2)}%`);
+  });
+});
