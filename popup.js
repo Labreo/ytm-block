@@ -536,6 +536,7 @@ function createTagComponent(type, value) {
 // --- UTILITIES ---
 
 function capitalizeWords(str) {
+  if (typeof str !== 'string') return '';
   return str
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -558,6 +559,7 @@ function showFeedback(message) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    validateImportSchema
+    validateImportSchema,
+    capitalizeWords
   };
 }
