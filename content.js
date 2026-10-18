@@ -60,7 +60,7 @@ class YTMBlockController {
     
     // Hardening Guards
     this.initialized = false;
-    this.debugMode = true; // Telemetry toggle
+    this.debugMode = false; // Telemetry toggle
     this.observerLifecycle = {
       track: false,
       queue: false,
