@@ -12,7 +12,8 @@ class YTMBlockController {
     // Local memory caches of blocked items to ensure instant lookups
     this.blockedArtists = [];
     this.blockedSongs = [];
-    this.blockedAlbums = [];
+    this._blockedAlbums = [];
+    this._precomputedBlockedAlbums = [];
     
     // Player observer references
     this.observer = null;
@@ -2405,6 +2406,32 @@ class YTMBlockController {
   }
 
   /**
+   * Gets the list of blocked albums.
+   * @returns {Array<string>}
+   */
+  get blockedAlbums() {
+    return this._blockedAlbums;
+  }
+
+  set blockedAlbums(albums) {
+    this._blockedAlbums = Array.isArray(albums) ? albums : [];
+    this._precomputedBlockedAlbums = this._blockedAlbums.map(blocked => ({
+      raw: blocked,
+      lower: typeof blocked === 'string' ? blocked.toLowerCase().trim() : String(blocked || '').toLowerCase().trim()
+    }));
+  }
+
+  _getPrecomputedBlockedAlbums() {
+    if (!this._precomputedBlockedAlbums || this._precomputedBlockedAlbums.length !== this._blockedAlbums.length) {
+      this._precomputedBlockedAlbums = (this._blockedAlbums || []).map(blocked => ({
+        raw: blocked,
+        lower: typeof blocked === 'string' ? blocked.toLowerCase().trim() : String(blocked || '').toLowerCase().trim()
+      }));
+    }
+    return this._precomputedBlockedAlbums;
+  }
+
+  /**
    * Evaluates if the given album title matches any blocked album rules.
    * @param {string} albumTitle - The raw album title.
    * @returns {string|null} The matched block rule value, or null.
@@ -2413,10 +2440,11 @@ class YTMBlockController {
     if (!albumTitle || this.blockedAlbums.length === 0) return null;
     const albumLower = albumTitle.toLowerCase().trim();
     
-    for (const blocked of this.blockedAlbums) {
-      const blockedLower = blocked.toLowerCase().trim();
-      if (albumLower === blockedLower || albumLower.includes(blockedLower)) {
-        return blocked;
+    const precomputed = this._getPrecomputedBlockedAlbums();
+    for (let i = 0; i < precomputed.length; i++) {
+      const item = precomputed[i];
+      if (albumLower === item.lower || albumLower.includes(item.lower)) {
+        return item.raw;
       }
     }
     return null;
