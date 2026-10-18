@@ -2375,13 +2375,22 @@ class YTMBlockController {
     console.log('[YTM Block Debug] normalized song:', normalizedInput);
     console.log('[YTM Block Debug] blockedSongs array:', this.blockedSongs);
 
-    for (const blocked of this.blockedSongs) {
-      const normalizedBlocked = this.normalizeSongTitle(blocked);
+    // Cache normalized versions of blocked songs to avoid redundant normalization per iteration
+    if (!this._normalizedBlockedSongsCache || this._normalizedBlockedSongsSource !== this.blockedSongs) {
+      this._normalizedBlockedSongsSource = this.blockedSongs;
+      this._normalizedBlockedSongsCache = this.blockedSongs.map((blocked) => ({
+        raw: blocked,
+        normalized: this.normalizeSongTitle(blocked)
+      }));
+    }
+
+    for (const item of this._normalizedBlockedSongsCache) {
+      const normalizedBlocked = item.normalized;
       if (normalizedInput === normalizedBlocked || 
           normalizedInput.includes(normalizedBlocked) || 
           normalizedBlocked.includes(normalizedInput)) {
-        console.log('[YTM Block Debug] shouldBlockSong result:', blocked);
-        return blocked;
+        console.log('[YTM Block Debug] shouldBlockSong result:', item.raw);
+        return item.raw;
       }
     }
     console.log('[YTM Block Debug] shouldBlockSong result: null');
