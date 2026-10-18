@@ -825,9 +825,9 @@ class YTMBlockController {
             for (let j = 0; j < mutation.addedNodes.length; j++) {
               const node = mutation.addedNodes[j];
               if (node && node.nodeType === 1) { // Node.ELEMENT_NODE
-                const tagName = node.tagName ? node.tagName.toLowerCase() : '';
-                if (tagName === 'ytmusic-menu-popup-renderer' ||
-                    tagName === 'tp-yt-paper-listbox' ||
+                const tagName = node.tagName || '';
+                if (tagName === 'YTMUSIC-MENU-POPUP-RENDERER' ||
+                    tagName === 'TP-YT-PAPER-LISTBOX' ||
                     (node.querySelector && node.querySelector('ytmusic-menu-popup-renderer, tp-yt-paper-listbox'))) {
                   hasPopupChange = true;
                   break;
