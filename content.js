@@ -1178,7 +1178,7 @@ class YTMBlockController {
                          clicked.closest('#button') ||
                          clicked.closest('.ytmusic-menu-renderer');
       if (menuButton) {
-        console.log('%c[YTM Block]%c 🖱️ Left-click on menu button resolved! Crawling context...', 'color: #FF0033; font-weight: bold;', 'color: default;');
+        this.log('debug', '🖱️ Left-click on menu button resolved! Crawling context...');
         const context = this.extractContextData(menuButton);
         if (context && (context.artist || context.song || context.album)) {
           this.lastRightClickedContext = {
@@ -1188,9 +1188,9 @@ class YTMBlockController {
             entityType: context.entityType,
             timestamp: Date.now()
           };
-          console.log(`%c[YTM Block]%c Cached context from menu launcher click: artist="${context.artist}", song="${context.song}", album="${context.album}"`, 'color: #10B981; font-weight: bold;', 'color: default;');
+          this.log('debug', `Cached context from menu launcher click: artist="${context.artist}", song="${context.song}", album="${context.album}"`);
         } else {
-          console.log('%c[YTM Block]%c Could not extract context data from click.', 'color: #EF4444; font-weight: bold;', 'color: default;');
+          this.log('debug', 'Could not extract context data from click.');
         }
 
         // Trigger immediate menu polling to inject custom context menus
