@@ -1607,15 +1607,16 @@ class YTMBlockController {
       const anchors = responsiveItem.querySelectorAll('a');
       for (const a of anchors) {
         const href = a.getAttribute('href') || '';
-        const text = a.textContent.trim();
-        if ((href.includes('/browse/UC') || href.includes('/channel/UC') || href.includes('/artist/') ||
-            (href.includes('/browse/') && !href.includes('/browse/VL') && !href.includes('/browse/MPRE') && !href.includes('/watch?v='))) && 
-            text) {
-          return {
-            value: text,
-            confidence: 0.9,
-            source: 'Row Artist Link extraction'
-          };
+        if (href.includes('/browse/UC') || href.includes('/channel/UC') || href.includes('/artist/') ||
+            (href.includes('/browse/') && !href.includes('/browse/VL') && !href.includes('/browse/MPRE') && !href.includes('/watch?v='))) {
+          const text = a.textContent.trim();
+          if (text) {
+            return {
+              value: text,
+              confidence: 0.9,
+              source: 'Row Artist Link extraction'
+            };
+          }
         }
       }
       const subtitleEl = responsiveItem.querySelector('.subtitle') || responsiveItem.querySelector('.secondary-flex-columns') || responsiveItem.querySelector('.flex-column:nth-child(2)');
@@ -1638,15 +1639,16 @@ class YTMBlockController {
       const anchors = queueItem.querySelectorAll('a');
       for (const a of anchors) {
         const href = a.getAttribute('href') || '';
-        const text = a.textContent.trim();
-        if ((href.includes('/browse/UC') || href.includes('/channel/UC') || 
-            (href.includes('/browse/') && !href.includes('/browse/VL') && !href.includes('/browse/MPRE') && !href.includes('/watch?v='))) && 
-            text) {
-          return {
-            value: text,
-            confidence: 0.9,
-            source: 'Queue Row Artist Link extraction'
-          };
+        if (href.includes('/browse/UC') || href.includes('/channel/UC') ||
+            (href.includes('/browse/') && !href.includes('/browse/VL') && !href.includes('/browse/MPRE') && !href.includes('/watch?v='))) {
+          const text = a.textContent.trim();
+          if (text) {
+            return {
+              value: text,
+              confidence: 0.9,
+              source: 'Queue Row Artist Link extraction'
+            };
+          }
         }
       }
       const bylineEl = queueItem.querySelector('.byline') || queueItem.querySelector('[class*="byline"]') || queueItem.querySelector('.secondary-title');
@@ -1747,15 +1749,16 @@ class YTMBlockController {
       const anchors = container.querySelectorAll('a');
       for (const a of anchors) {
         const href = a.getAttribute('href') || '';
-        const text = a.textContent.trim();
-        if ((href.includes('/browse/UC') || href.includes('/channel/UC') || 
-            (href.includes('/browse/') && !href.includes('/browse/VL') && !href.includes('/browse/MPRE') && !href.includes('/watch?v='))) && 
-            text) {
-          return {
-            value: text,
-            confidence: 0.7,
-            source: 'Generic Container Artist Link extraction'
-          };
+        if (href.includes('/browse/UC') || href.includes('/channel/UC') ||
+            (href.includes('/browse/') && !href.includes('/browse/VL') && !href.includes('/browse/MPRE') && !href.includes('/watch?v='))) {
+          const text = a.textContent.trim();
+          if (text) {
+            return {
+              value: text,
+              confidence: 0.7,
+              source: 'Generic Container Artist Link extraction'
+            };
+          }
         }
       }
     }
@@ -1924,13 +1927,15 @@ class YTMBlockController {
       const anchors = responsiveItem.querySelectorAll('a');
       for (const a of anchors) {
         const href = a.getAttribute('href') || '';
-        const text = a.textContent.trim();
-        if ((href.includes('/browse/MPRE') || href.includes('/browse/FIBY')) && text) {
-          return {
-            value: text,
-            confidence: 0.9,
-            source: 'Row Album Link extraction'
-          };
+        if (href.includes('/browse/MPRE') || href.includes('/browse/FIBY')) {
+          const text = a.textContent.trim();
+          if (text) {
+            return {
+              value: text,
+              confidence: 0.9,
+              source: 'Row Album Link extraction'
+            };
+          }
         }
       }
       const subtitleEl = responsiveItem.querySelector('.subtitle') || responsiveItem.querySelector('.secondary-flex-columns');
