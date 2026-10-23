@@ -45,7 +45,7 @@ function createMockQueueItem(title, artist, album) {
       return [];
     },
     querySelector(selector) {
-      if (selector === '.song-title' || selector === '.title' || selector === 'yt-formatted-string') {
+      if (selector === '.song-title' || selector === '.title' || selector === 'yt-formatted-string' || selector === '.song-title, .title, yt-formatted-string') {
         return { textContent: title };
       }
       if (selector === '.byline' || selector === '[class*="byline"]') {
